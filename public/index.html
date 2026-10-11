@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kinora — Cinematic AI Movie & Pop-Culture Companion</title>
+  <meta name="description" content="Kinora — Every story, zero spoilers. A premium, cinematic AI chatbot expert on movies, TV series, anime, and pop culture." />
+  <meta property="og:title" content="Kinora — Every story, zero spoilers." />
+
+  <!-- Google Fonts: Space Grotesk (Headings) + Inter (Body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
+
+  <!-- Markdown Renderer & HTML Sanitizer from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-container" id="app">
+    <!-- ========================================================
+         LEFT SIDEBAR: Logo, Modes, Watchlist, Recents
+         ======================================================== -->
+    <aside class="sidebar" id="sidebar" aria-label="Sidebar Navigation">
+      <!-- Brand Header -->
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="2" width="20" height="20" rx="4" />
+            <path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5" />
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">Kin<span class="text-gradient">ora</span></span>
+          <span class="brand-tagline">Every story, zero spoilers.</span>
+        </div>
+      </div>
+
+      <!-- New Chat Button -->
+      <button class="btn-new-chat" id="btn-new-chat" title="Start a fresh conversation (Ctrl+K)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        <span>New Chat</span>
+        <kbd class="shortcut-key">Ctrl K</kbd>
+      </button>
+
+      <!-- Modes Navigation (Icons + Names only, no subtitles, no extra badges) -->
+      <div class="sidebar-section">
+        <div class="section-label">MODES</div>
+        <nav class="mode-nav" id="mode-nav">
+          <button class="mode-item active" data-mode="general">
+            <span class="mode-icon">⚡</span>
+            <span class="mode-title">Kinora AI</span>
+          </button>
+
+          <button class="mode-item" data-mode="spoiler-safe">
+            <span class="mode-icon">🛡️</span>
+            <span class="mode-title">Spoiler Shield</span>
+          </button>
+
+          <button class="mode-item" data-mode="mood-picks">
+            <span class="mode-icon">🎭</span>
+            <span class="mode-title">Mood Picks</span>
+          </button>
+
+          <button class="mode-item" data-mode="quiz">
+            <span class="mode-icon">🏆</span>
+            <span class="mode-title">Quiz & Trivia</span>
+          </button>
+
+          <button class="mode-item" data-mode="character">
+            <span class="mode-icon">🎙️</span>
+            <span class="mode-title">Character Chat</span>
+          </button>
+
+          <button class="mode-item" data-mode="compare">
+            <span class="mode-icon">⚖️</span>
+            <span class="mode-title">Compare & Debate</span>
+          </button>
+
+          <button class="mode-item" data-mode="for-you">
+            <span class="mode-icon">✨</span>
+            <span class="mode-title">Taste Profile</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Watchlist Button -->
+      <div class="sidebar-section">
+        <div class="section-label">SAVED</div>
+        <button class="watchlist-nav-btn" id="btn-open-watchlist" title="Open My Watchlist">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+          </svg>
+          <span>My Watchlist</span>
+          <span class="count-badge" id="watchlist-count">0</span>
+        </button>
+      </div>
+
+      <!-- Recent Conversations -->
+      <div class="sidebar-section flex-grow">
+        <div class="section-header">
+          <span class="section-label">RECENTS</span>
+          <button class="btn-icon-subtle" id="btn-clear-history" title="Clear chat history">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
+        </div>
+        <div class="history-list" id="history-list">
+          <div class="empty-history">No past conversations yet.</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Overlay backdrop for mobile drawer -->
+    <div class="mobile-overlay" id="mobile-overlay"></div>
+
+    <!-- ========================================================
+         MAIN CHAT STAGE (Centered, max-width ~760px)
+         ======================================================== -->
+    <main class="main-content" id="main-content">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="btn-icon mobile-toggle" id="btn-toggle-sidebar" aria-label="Toggle navigation">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+
+          <div class="current-mode-badge" id="current-mode-badge">
+            <span class="badge-icon">⚡</span>
+            <span class="badge-text">Kinora AI</span>
+          </div>
+
+          <div class="spoiler-pill" id="spoiler-shield-pill" title="Configure your current show progress">
+            <span class="shield-dot"></span>
+            <span class="shield-text">Spoiler Shield: Off</span>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <button class="btn-icon" id="btn-toggle-theme" title="Toggle theme (Dark / Light)">
+            <svg id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+            <svg id="theme-icon-sun" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Chat Viewport -->
+      <div class="chat-viewport" id="chat-viewport">
+        <!-- Clean Welcome State (Shown when chat has no messages) -->
+        <div class="hero-welcome" id="hero-welcome">
+          <div class="hero-brand">
+            <h1 class="hero-title">Kin<span class="text-gradient">ora</span></h1>
+            <p class="hero-tagline" id="hero-tagline">Every story, zero spoilers.</p>
+          </div>
+
+          <!-- 4 Clean Suggestion Chips (Dynamically updated per mode) -->
+          <div class="hero-chips-grid" id="hero-chips-grid">
+            <button class="hero-chip-btn" data-prompt="Recommend 3 mind-bending sci-fi movies under 2 hours">
+              <span class="chip-icon">🌌</span>
+              <span class="chip-text">Mind-Bending Sci-Fi</span>
+            </button>
+            <button class="hero-chip-btn" data-prompt="I am on Season 2 Episode 4 of Dark. Give me a spoiler-safe recap">
+              <span class="chip-icon">🛡️</span>
+              <span class="chip-text">Dark S02E04 Safe Recap</span>
+            </button>
+            <button class="hero-chip-btn" data-prompt="Compare Breaking Bad vs Better Call Saul">
+              <span class="chip-icon">⚖️</span>
+              <span class="chip-text">Breaking Bad vs BCS</span>
+            </button>
+            <button class="hero-chip-btn" data-prompt="Give me a cozy comfort movie to unwind after a long day">
+              <span class="chip-icon">☕</span>
+              <span class="chip-text">Comfort Movie Night</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Messages Container -->
+        <div class="messages-container hidden" id="messages-container"></div>
+      </div>
+
+      <!-- Chat Input Area -->
+      <footer class="chat-input-area">
+        <form class="input-form" id="chat-form">
+          <div class="input-wrapper" id="input-wrapper">
+            <span class="input-mode-tag" id="input-mode-tag">⚡ Kinora AI</span>
+            <textarea
+              id="chat-input"
+              class="chat-input"
+              rows="1"
+              placeholder="Ask about any movie, series, anime, or pop culture..."
+              aria-label="Ask Kinora"
+            ></textarea>
+
+            <div class="input-actions">
+              <!-- Voice Input -->
+              <button
+                type="button"
+                class="btn-icon-subtle"
+                id="btn-voice-input"
+                title="Voice input"
+                aria-label="Voice input"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </svg>
+              </button>
+
+              <!-- Send / Stop Button -->
+              <button
+                type="submit"
+                class="btn-send"
+                id="btn-send"
+                title="Send message"
+                aria-label="Send message"
+              >
+                <svg class="icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                <svg class="icon-stop hidden" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <div class="input-footer-note">
+          <span class="tmdb-disclaimer">This product uses the TMDB API but is not endorsed or certified by TMDB.</span>
+        </div>
+      </footer>
+    </main>
+
+    <!-- ========================================================
+         RIGHT COLLAPSIBLE PANEL: Title Inspector
+         Hidden by default; opens only when a title is shown
+         ======================================================== -->
+    <aside class="inspector-panel collapsed" id="inspector-panel" aria-label="Title Details Panel">
+      <div class="inspector-header">
+        <div class="inspector-title-group">
+          <span class="inspector-icon">🔍</span>
+          <span class="inspector-title">Title Inspector</span>
+        </div>
+        <button class="btn-icon-subtle" id="btn-close-inspector" aria-label="Close inspector">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="inspector-content" id="inspector-content">
+        <!-- Clean Empty State -->
+        <div class="inspector-placeholder" id="inspector-placeholder">
+          <div class="placeholder-icon">🎞️</div>
+          <h3>Title Inspector</h3>
+          <p class="placeholder-text">
+            No title selected yet. Mention or explore any movie or series to inspect its details here.
+          </p>
+        </div>
+
+        <!-- Skeleton Loader while fetching details -->
+        <div class="inspector-skeleton hidden" id="inspector-skeleton">
+          <div class="skeleton-poster"></div>
+          <div class="skeleton-line title"></div>
+          <div class="skeleton-line meta"></div>
+          <div class="skeleton-line text"></div>
+          <div class="skeleton-line text short"></div>
+        </div>
+
+        <!-- Active Title Info Card Container -->
+        <div class="inspector-card-active hidden" id="inspector-card-active"></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Modal: Watchlist View -->
+  <div class="modal-backdrop hidden" id="watchlist-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="modal-icon">🔖</span>
+          <h3>My Watchlist</h3>
+        </div>
+        <button class="btn-icon-subtle" id="btn-close-watchlist-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <form class="watchlist-input-row" id="watchlist-form">
+          <input type="text" id="watchlist-add-input" placeholder="Add a movie or show to your watchlist..." />
+          <button type="submit" class="btn-primary">Add</button>
+        </form>
+        <div class="watchlist-list" id="watchlist-list">
+          <!-- Populated dynamically via app.js -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Spoiler Shield Progress Config -->
+  <div class="modal-backdrop hidden" id="spoiler-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="modal-icon">🛡️</span>
+          <h3>Spoiler Shield Settings</h3>
+        </div>
+        <button class="btn-icon-subtle" id="btn-close-spoiler-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">
+          Set your exact watching progress for any series. Kinora enforces this strictly so no plot twists beyond your point are revealed.
+        </p>
+        <div class="form-group">
+          <label for="shield-show-input">Series Title</label>
+          <input type="text" id="shield-show-input" placeholder="e.g. Dark, Severance, Succession..." />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="shield-season-input">Season</label>
+            <input type="number" id="shield-season-input" min="1" value="2" />
+          </div>
+          <div class="form-group">
+            <label for="shield-episode-input">Episode</label>
+            <input type="number" id="shield-episode-input" min="1" value="4" />
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="btn-disable-shield">Disable Shield</button>
+        <button class="btn-primary" id="btn-save-shield">Lock Spoiler Shield</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vanilla App Script -->
+  <script src="app.js"></script>
+</body>
+</html>
