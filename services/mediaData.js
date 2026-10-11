@@ -216,14 +216,14 @@ async function search_title(args = {}) {
   }
 
   // LATEST-INFO FALLBACK:
-  // If TMDB returns nothing OR user gave a year >= 2025 and no matching recent title was found:
+  // (Disabled during Spoiler Shield mode to prevent uncontrolled web plot leaks)
   const targetYear = year ? parseInt(year, 10) : null;
   const hasRecentMatch = results.some((r) => {
     const yr = parseInt((r.release_date || r.first_air_date || '').slice(0, 4), 10);
     return yr >= 2025;
   });
 
-  if (results.length === 0 || (targetYear && targetYear >= 2025 && !hasRecentMatch)) {
+  if (!args.disableLiveFallback && (results.length === 0 || (targetYear && targetYear >= 2025 && !hasRecentMatch))) {
     const fallback = await getLatestInfoFallback(`${query} ${year || ''}`.trim());
     if (fallback) {
       return {
@@ -582,6 +582,30 @@ const toolDeclarations = [
   },
 ];
 
+/**
+ * Get series season and episode counts for the Spoiler Shield setup flow
+ */
+async function getSeriesSeasons(seriesId) {
+  if (!seriesId) return null;
+  const raw = await tmdbFetch(`/tv/${seriesId}`);
+  if (!raw || !raw.seasons) return null;
+  const regularSeasons = raw.seasons
+    .filter((s) => s.season_number > 0)
+    .map((s) => ({
+      season_number: s.season_number,
+      name: s.name || `Season ${s.season_number}`,
+      episode_count: s.episode_count || 10,
+    }));
+  return {
+    id: raw.id,
+    title: raw.name || raw.original_name,
+    poster_path: raw.poster_path ? `https://image.tmdb.org/t/p/w500${raw.poster_path}` : null,
+    number_of_seasons: regularSeasons.length,
+    number_of_episodes: raw.number_of_episodes,
+    seasons: regularSeasons,
+  };
+}
+
 const toolMap = {
   search_title,
   get_details,
@@ -593,11 +617,183 @@ const toolMap = {
   discover,
 };
 
-async function executeTool(name, args) {
+/**
+ * Execute tool with Spoiler Shield protection
+ * Filters out future episodes, unannounced plot twists, and spoiler details before passing to Gemini
+ */
+async function executeTool(name, args, shieldsInput = null) {
   const fn = toolMap[name];
   if (!fn) return { error: `Tool ${name} not recognized` };
+
+  const shieldsList = Array.isArray(shieldsInput)
+    ? shieldsInput
+    : (shieldsInput && (shieldsInput.title || shieldsInput.showTitle) ? [shieldsInput] : []);
+
+  // Check if search_title query touches any protected title
+  if (name === 'search_title' && shieldsList.length > 0) {
+    const qLower = (args.query || '').toLowerCase();
+    const isProtected = shieldsList.some((s) => {
+      const tLower = (s.title || s.showTitle || '').toLowerCase();
+      return tLower && (qLower.includes(tLower) || tLower.includes(qLower));
+    });
+    if (isProtected) {
+      args = { ...args, disableLiveFallback: true };
+    }
+  }
+
   try {
-    return await fn(args);
+    let result = await fn(args);
+    if (!result || result.error || shieldsList.length === 0) return result;
+
+    // Helper: find matching shield for an ID or title
+    const findShield = (targetId, targetTitle) => {
+      return (
+        shieldsList.find((s) => {
+          const idMatch = targetId && (s.tmdbId == targetId || s.id == targetId);
+          if (idMatch) return true;
+          if (targetTitle) {
+            const sTitle = (s.title || s.showTitle || '').toLowerCase();
+            const tTitle = targetTitle.toLowerCase();
+            return sTitle && (sTitle === tTitle || sTitle.includes(tTitle) || tTitle.includes(sTitle));
+          }
+          return false;
+        }) || (shieldsList.length === 1 ? shieldsList[0] : null)
+      );
+    };
+
+    // 1. FILTER get_season_episodes
+    if (name === 'get_season_episodes' && result.episodes) {
+      const shield = findShield(args.series_id, result.name);
+      if (!shield) return result;
+
+      if (shield.havenNotStarted) {
+        return {
+          series_id: result.series_id,
+          season_number: result.season_number,
+          name: result.name,
+          episode_count: 0,
+          episodes: [],
+          message: 'User has not started this series yet. No future episodes revealed.',
+        };
+      }
+
+      const targetSeason = parseInt(shield.season, 10) || 1;
+      const targetEp = parseInt(shield.episode, 10) || 1;
+      const requestedSeason = parseInt(args.season, 10) || 1;
+
+      // Season beyond current progress: return locked message
+      if (requestedSeason > targetSeason) {
+        return {
+          series_id: result.series_id,
+          season_number: requestedSeason,
+          locked: true,
+          episodes: [],
+          message: `Season ${requestedSeason} is beyond the user's progress (Season ${targetSeason} Episode ${targetEp}). Do not discuss future events.`,
+        };
+      }
+
+      // Same season: filter out future episodes (INCLUSIVE <= targetEp)
+      if (requestedSeason === targetSeason) {
+        const filtered = result.episodes.filter(
+          (ep) => (ep.episode_number || 0) <= targetEp
+        );
+
+        const mappedEpisodes = filtered.map((ep) => {
+          const hasSummary = Boolean(ep.overview && ep.overview.trim().length > 0);
+          const hasTitle = Boolean(ep.name && ep.name.trim().length > 0 && !ep.name.match(/^Episode\s+\d+$/i));
+          return {
+            episode_number: ep.episode_number,
+            name: ep.name || `Episode ${ep.episode_number}`,
+            air_date: ep.air_date,
+            overview: hasSummary ? ep.overview : '[No synopsis available in database]',
+            has_summary: hasSummary,
+            has_title: hasTitle,
+            rating: ep.vote_average,
+          };
+        });
+
+        const missingSummaries = mappedEpisodes.filter((e) => !e.has_summary);
+        let notice = null;
+        if (missingSummaries.length > 0) {
+          const missingNums = missingSummaries.map((e) => e.episode_number).join(', ');
+          notice = `TMDB does not have a summary for episode ${missingNums} yet. If the user asks for a recap, state clearly: "TMDB doesn't have a summary for episode ${missingNums} yet, so this recap covers up to the available episodes." Never invent or hallucinate events.`;
+        }
+
+        // Print what is sent to Gemini (titles and overviews of the included episodes) to the server console
+        console.log(`\n=================================================`);
+        console.log(`[Spoiler Shield] Sending Season ${result.season_number} Episodes to Gemini (Target <= Ep ${targetEp}):`);
+        mappedEpisodes.forEach((ep) => {
+          console.log(`  - Ep ${ep.episode_number}: "${ep.name}" | Overview: ${ep.overview.slice(0, 80)}${ep.overview.length > 80 ? '...' : ''} (has_summary: ${ep.has_summary})`);
+        });
+        if (notice) console.log(`  Notice for Gemini: ${notice}`);
+        console.log(`=================================================\n`);
+
+        return {
+          series_id: result.series_id,
+          season_number: result.season_number,
+          name: result.name,
+          episode_count: mappedEpisodes.length, // Do not disclose total remaining episodes!
+          episodes: mappedEpisodes,
+          notice_for_bot: notice,
+        };
+      }
+
+      // Past season: allowed
+      console.log(`[Spoiler Shield] Sending full past Season ${requestedSeason} to Gemini (User is at S${targetSeason}E${targetEp}).`);
+      return result;
+    }
+
+    // 2. FILTER get_details
+    if (name === 'get_details') {
+      const shield = findShield(args.id, result.title || result.name);
+      if (!shield) return result;
+
+      const sanitized = { ...result };
+      if (sanitized.type === 'tv') {
+        sanitized.status = 'In Progress';
+        const currentSeason = parseInt(shield.season, 10) || 1;
+        sanitized.number_of_seasons = currentSeason;
+        delete sanitized.number_of_episodes;
+
+        if (shield.season) {
+          sanitized.duration = `Season ${shield.season}`;
+        }
+        if (sanitized.cast) {
+          sanitized.cast = sanitized.cast.slice(0, 5);
+        }
+        if (shield.havenNotStarted && sanitized.overview) {
+          sanitized.overview = sanitized.overview.split('.')[0] + '.';
+        }
+      } else if (sanitized.type === 'movie' && !shield.movieWatched) {
+        if (sanitized.overview) {
+          sanitized.overview = sanitized.overview.split('.')[0] + '.';
+        }
+      }
+      return sanitized;
+    }
+
+    // 3. FILTER get_similar and get_trending
+    if (name === 'get_similar' || name === 'get_trending') {
+      if (result && Array.isArray(result.results)) {
+        result.results = result.results.map((item) => {
+          const itemTitle = (item.title || item.name || '').toLowerCase();
+          const matchedShield = shieldsList.find((s) => {
+            const sTitle = (s.title || s.showTitle || '').toLowerCase();
+            return sTitle && (itemTitle.includes(sTitle) || sTitle.includes(itemTitle));
+          });
+          if (matchedShield) {
+            return {
+              ...item,
+              overview: 'Protected by Spoiler Shield.',
+            };
+          }
+          return item;
+        });
+      }
+      return result;
+    }
+
+    return result;
   } catch (err) {
     return { error: `Failed to execute ${name}: ${err.message}` };
   }
@@ -613,6 +809,7 @@ module.exports = {
   get_similar,
   discover,
   getLatestInfoFallback,
+  getSeriesSeasons,
   toolDeclarations,
   executeTool,
 };

@@ -60,6 +60,35 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// -------------------------------------------------------------
+// Route: Media Search for Spoiler Shield Setup
+// -------------------------------------------------------------
+app.get('/api/media/search', async (req, res) => {
+  const query = (req.query.query || '').trim();
+  if (!query) return res.json({ results: [] });
+  try {
+    const data = await media.search_title({ query, type: 'multi' });
+    res.json(data || { results: [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// Route: Media Seasons for Series Setup
+// -------------------------------------------------------------
+app.get('/api/media/seasons', async (req, res) => {
+  const id = parseInt(req.query.id, 10);
+  if (!id) return res.status(400).json({ error: 'Valid series id is required' });
+  try {
+    const data = await media.getSeriesSeasons(id);
+    if (!data) return res.status(404).json({ error: 'Series not found' });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Helper for waiting between retries / stream pacing
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -67,7 +96,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Route: Streaming Chat Endpoint (Server-Sent Events)
 // -------------------------------------------------------------
 app.post('/api/chat', async (req, res) => {
-  const { message, history = [], mode = 'general', spoilerShield = null } = req.body;
+  const { message, history = [], mode = 'general', spoilerShield = null, shields = null } = req.body;
 
   if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: 'Message text is required.' });
@@ -105,14 +134,50 @@ app.post('/api/chat', async (req, res) => {
     const honestyRule = `HONESTY RULE: Never say a movie or series does not exist, is unannounced, or is not released unless the tools confirm it. If you cannot find a title, say: 'I couldn't find that one. Could you check the spelling or tell me the year?' Do not guess. Today's date is ${currentDate}; treat anything after your training data as possibly existing.`;
     const lookupRule = `ALWAYS LOOK UP FIRST: For any question about a specific title, person, release date, cast, rating, platform, or 'is it out yet', you MUST call the tools BEFORE answering. Never answer facts from memory. Once the tools return live data, synthesize a punchy, factual answer.`;
 
-    // Dynamic Mode / Spoiler Shield Instructions
-    let modeInstruction = '';
-    if (spoilerShield && spoilerShield.active && spoilerShield.showTitle) {
-      modeInstruction += `CRITICAL SPOILER SHIELD: User is at "${spoilerShield.showTitle}" (${spoilerShield.progress || 'current episode'}). NEVER reveal or hint anything after this.\n`;
+    // -------------------------------------------------------------
+    // Multi-Shield Enforcement Across ALL Modes
+    // -------------------------------------------------------------
+    const allShields = Array.isArray(shields) && shields.length > 0
+      ? shields
+      : (spoilerShield && (spoilerShield.title || spoilerShield.showTitle) ? [spoilerShield] : []);
+
+    let spoilerShieldPrompt = '';
+    if (allShields.length > 0) {
+      const shieldLines = allShields.map((s) => {
+        const title = s.title || s.showTitle;
+        if (s.type === 'movie') {
+          return s.movieWatched
+            ? `• "${title}" (Movie): User has watched it. Full discussion allowed.`
+            : `• "${title}" (Movie): User has NOT watched it yet. Strictly spoiler-free: only discuss premise, cast, tone, trailer, and streaming availability. Never reveal plot twists, endings, or character fates.`;
+        }
+        if (s.havenNotStarted) {
+          return `• "${title}": User has NOT started yet (at S0E0). Strictly premise, genre, and tone only. Never reveal any plot points.`;
+        }
+        if (s.absoluteEpisode) {
+          return `• "${title}": User has watched through Episode ${s.absoluteEpisode} (INCLUSIVE: episodes 1 through ${s.absoluteEpisode} have been watched). Only discuss events through Episode ${s.absoluteEpisode}. Episodes after Episode ${s.absoluteEpisode} are strictly forbidden spoilers.`;
+        }
+        const season = s.season || 1;
+        const episode = s.episode || 1;
+        return `• "${title}": User has watched THROUGH Season ${season} Episode ${episode} (INCLUSIVE: episodes 1 through ${episode} of Season ${season} have been watched). Only discuss events through Episode ${episode}. Episodes after Episode ${episode} are strictly forbidden spoilers.`;
+      }).join('\n');
+
+      spoilerShieldPrompt = `CRITICAL SPOILER SHIELD ENFORCEMENT (Active across all modes):
+The user has active spoiler protections configured for the following titles:
+${shieldLines}
+
+RULES FOR PROTECTED TITLES:
+1. For any question or discussion involving these protected titles, ONLY discuss events through the user's specified progress point (inclusive: "S1 E3" means the user has watched episodes 1, 2, and 3).
+2. Treat later plot twists, character fates, deaths, endings, source book plot, and previous adaptations as strictly forbidden spoilers.
+3. If TMDB is missing a summary for an included episode, state clearly: "TMDB doesn't have a summary for episode X yet, so this recap covers up to the available episodes." Never invent or hallucinate plot events.
+4. Never hint, never confirm or deny theories about the future, and never say things like "you'll love episode 6" or "it gets dark soon".
+5. If the user asks about the future or about an episode/season beyond their progress point, reply briefly and politely:
+"That's beyond where you are. Want to unlock spoilers, or want my take on what's happened so far?"
+6. You may speculate or analyze ONLY using what has happened so far up to the user's progress.`;
     }
 
+    let modeInstruction = '';
     if (mode === 'spoiler-safe') {
-      modeInstruction += `Keep all responses completely safe from spoilers.\n`;
+      modeInstruction += `Keep all responses completely safe from spoilers up to the user's progress.\n`;
     } else if (mode === 'mood-picks') {
       modeInstruction += `Give exactly 3 picks matching the mood with runtime and one line on why it fits.\n`;
     } else if (mode === 'compare') {
@@ -127,6 +192,7 @@ app.post('/api/chat', async (req, res) => {
       KINORA_BASE_PROMPT,
       honestyRule,
       lookupRule,
+      spoilerShieldPrompt,
       modeInstruction ? `ACTIVE MODE INSTRUCTION:\n${modeInstruction}` : '',
     ]
       .filter(Boolean)
@@ -193,7 +259,8 @@ app.post('/api/chat', async (req, res) => {
           const toolResponses = [];
           for (const call of response.functionCalls) {
             console.log(`[Tool Call Turn ${toolTurns}] ${call.name}:`, call.args);
-            const toolOutput = await media.executeTool(call.name, call.args);
+            // Execute tool passing allShields for filtering across all modes
+            const toolOutput = await media.executeTool(call.name, call.args, allShields);
 
             // Capture data for Title Inspector
             if (call.name === 'get_details' && toolOutput && !toolOutput.error) {
@@ -249,6 +316,47 @@ app.post('/api/chat', async (req, res) => {
         }
 
         generatedText = response.text || '';
+
+        // -------------------------------------------------------------
+        // OPTIONAL SAFETY CHECK (Fast Flash-Lite audit across all shields)
+        // -------------------------------------------------------------
+        const activeOrRelevantShield = allShields.find((s) => {
+          const tName = (s.title || s.showTitle || '').toLowerCase();
+          return tName && (message.toLowerCase().includes(tName) || generatedText.toLowerCase().includes(tName));
+        }) || allShields[0];
+
+        if (activeOrRelevantShield && generatedText && !isClientDisconnected) {
+          try {
+            const safetyChat = ai.chats.create({
+              model: 'gemini-3.5-flash-lite',
+              config: { temperature: 0.0, maxOutputTokens: 10 },
+            });
+            const targetTitle = activeOrRelevantShield.title || activeOrRelevantShield.showTitle;
+            const progressPointStr = activeOrRelevantShield.season
+              ? `Season ${activeOrRelevantShield.season} Episode ${activeOrRelevantShield.episode}`
+              : (activeOrRelevantShield.absoluteEpisode ? `Episode ${activeOrRelevantShield.absoluteEpisode}` : 'premise only');
+            const safetyPrompt = `SPOILER SAFETY AUDIT:
+The user is at: "${targetTitle}" ${progressPointStr}.
+Does the following response reveal, describe, or spoil any events, character fates, deaths, or plot twists occurring AFTER that point?
+Answer strictly with YES or NO.
+
+Response to check:
+${generatedText}
+
+Answer (YES or NO):`;
+            const safetyCheck = await safetyChat.sendMessage({ message: safetyPrompt });
+            const answer = (safetyCheck.text || '').trim().toUpperCase();
+            if (answer.includes('YES')) {
+              console.warn(`[Spoiler Shield Safety Check] CAUGHT SPOILER for ${targetTitle}! Replacing with safe fallback.`);
+              generatedText = "I almost said too much, so I held that back. Ask me about what you've watched so far.";
+            } else {
+              console.log(`[Spoiler Shield Safety Check] Clean response verified for ${targetTitle}.`);
+            }
+          } catch (auditErr) {
+            console.warn('[Spoiler Shield Safety Check Error]:', auditErr.message);
+          }
+        }
+
         break;
       } catch (modelErr) {
         console.warn(`Model ${modelName} error:`, modelErr.message || modelErr);

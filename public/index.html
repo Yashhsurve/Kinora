@@ -135,14 +135,22 @@
             </svg>
           </button>
 
-          <div class="current-mode-badge" id="current-mode-badge">
-            <span class="badge-icon">⚡</span>
-            <span class="badge-text">Kinora AI</span>
-          </div>
+          <!-- Plain page title showing current mode name (no pill or button look) -->
+          <div class="topbar-mode-title" id="current-mode-title">Kinora AI</div>
 
-          <div class="spoiler-pill" id="spoiler-shield-pill" title="Configure your current show progress">
-            <span class="shield-dot"></span>
-            <span class="shield-text">Spoiler Shield: Off</span>
+          <!-- Topbar horizontal shield chips for all protected titles -->
+          <div class="topbar-shields-bar" id="topbar-shields-bar">
+            <div class="topbar-chips-list" id="topbar-chips-list">
+              <!-- Dynamically populated chips for every saved title -->
+            </div>
+            <button class="btn-add-shield-chip" id="btn-add-shield-topbar" title="Add another protected show">
+              <span class="plus-icon">+</span>
+              <span class="chip-text">Add Shield</span>
+            </button>
+            <div class="shield-overflow-wrapper hidden" id="shield-overflow-wrapper">
+              <button class="btn-overflow-chip" id="btn-overflow-chip" title="View more shielded titles">+0</button>
+              <div class="shield-overflow-dropdown hidden" id="shield-overflow-dropdown"></div>
+            </div>
           </div>
         </div>
 
@@ -321,40 +329,148 @@
     </div>
   </div>
 
-  <!-- Modal: Spoiler Shield Progress Config -->
+  <!-- Modal: Spoiler Shield Setup & Management (Redesigned) -->
   <div class="modal-backdrop hidden" id="spoiler-modal">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-lg">
       <div class="modal-header">
         <div class="modal-title-group">
           <span class="modal-icon">🛡️</span>
-          <h3>Spoiler Shield Settings</h3>
+          <h3>Spoiler Shields</h3>
         </div>
-        <button class="btn-icon-subtle" id="btn-close-spoiler-modal">✕</button>
+        <button class="btn-icon-subtle" id="btn-close-spoiler-modal" aria-label="Close modal">✕</button>
       </div>
+
       <div class="modal-body">
-        <p class="modal-desc">
-          Set your exact watching progress for any series. Kinora enforces this strictly so no plot twists beyond your point are revealed.
-        </p>
-        <div class="form-group">
-          <label for="shield-show-input">Series Title</label>
-          <input type="text" id="shield-show-input" placeholder="e.g. Dark, Severance, Succession..." />
+        <!-- Top: Big, obvious "+ Add another show" button -->
+        <div class="shield-top-actions">
+          <button type="button" class="btn-add-another-show" id="btn-open-add-show">
+            <span class="btn-add-icon">+</span>
+            <span>Add another show</span>
+          </button>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="shield-season-input">Season</label>
-            <input type="number" id="shield-season-input" min="1" value="2" />
+
+        <!-- Search Box: Reveals on click of "+ Add another show" -->
+        <div class="shield-search-section hidden" id="shield-search-section">
+          <div class="search-header-row">
+            <label class="form-label" for="shield-search-input">What are you watching?</label>
+            <button type="button" class="btn-link" id="btn-cancel-search">Close search</button>
           </div>
-          <div class="form-group">
-            <label for="shield-episode-input">Episode</label>
-            <input type="number" id="shield-episode-input" min="1" value="4" />
+          <div class="shield-search-bar">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="text"
+              id="shield-search-input"
+              class="shield-search-input"
+              placeholder="Search movies, series, or anime on TMDB..."
+              autocomplete="off"
+            />
+            <span class="shield-search-spinner hidden" id="shield-search-spinner">⏳</span>
+          </div>
+
+          <!-- Live TMDB Search Results Dropdown -->
+          <div class="shield-results-list hidden" id="shield-results-list"></div>
+        </div>
+
+        <!-- Middle: "Your shields" Cards List -->
+        <div class="shields-list-section" id="shields-list-section">
+          <div class="saved-section-header">
+            <h5>Your shields</h5>
+            <span class="saved-count" id="shield-saved-count">0 protected</span>
+          </div>
+          <div class="shields-cards-list" id="shield-saved-list">
+            <!-- Dynamically populated cards with poster, title, S1 E3, ACTIVE badge, Switch, Edit, Trash buttons -->
           </div>
         </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" id="btn-disable-shield">Disable Shield</button>
-        <button class="btn-primary" id="btn-save-shield">Lock Spoiler Shield</button>
+
+        <!-- Editor: Progress Configuration Card (Shown when editing or adding) -->
+        <div class="shield-setup-card hidden" id="shield-setup-card">
+          <div class="editor-header-bar">
+            <span class="editor-label">EDIT SHIELD PROGRESS</span>
+            <button type="button" class="btn-link" id="btn-back-to-list">Back to shields</button>
+          </div>
+
+          <div class="shield-title-preview">
+            <img id="shield-preview-poster" class="shield-preview-poster" src="" alt="Poster" />
+            <div class="shield-preview-meta">
+              <div class="preview-title-row">
+                <h4 id="shield-preview-title" class="preview-title">Title Name</h4>
+                <span id="shield-preview-type" class="badge-type">TV</span>
+              </div>
+              <p id="shield-preview-year" class="preview-year">2026</p>
+              <button type="button" class="btn-link" id="btn-change-title">Pick a different show</button>
+            </div>
+          </div>
+
+          <!-- Progress Settings for TV Series -->
+          <div class="shield-tv-progress" id="shield-tv-progress">
+            <div class="progress-dropdown-row" id="shield-season-ep-row">
+              <div class="form-group flex-1">
+                <label for="shield-season-select">Season</label>
+                <select id="shield-season-select" class="form-select"></select>
+              </div>
+              <div class="form-group flex-1">
+                <label for="shield-episode-select">Episode</label>
+                <select id="shield-episode-select" class="form-select"></select>
+              </div>
+            </div>
+
+            <!-- Absolute Episode input for Anime / Flat Numbering -->
+            <div class="form-group hidden" id="shield-abs-ep-row">
+              <label for="shield-abs-ep-input">Episode Number</label>
+              <input type="number" id="shield-abs-ep-input" class="form-input" min="1" placeholder="e.g. 42" />
+            </div>
+
+            <!-- Toggles for TV: Anime/Episode-only and Haven't Started -->
+            <div class="shield-toggles-row">
+              <label class="custom-checkbox-label">
+                <input type="checkbox" id="shield-ep-only-toggle" />
+                <span>Episode number only (anime / continuous)</span>
+              </label>
+
+              <label class="custom-checkbox-label">
+                <input type="checkbox" id="shield-not-started-toggle" />
+                <span>Haven't started yet (strict premise only)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Progress Settings for Movies -->
+          <div class="shield-movie-progress hidden" id="shield-movie-progress">
+            <label class="form-label">Have you watched it?</label>
+            <div class="movie-choice-group">
+              <label class="movie-radio-card">
+                <input type="radio" name="movie_watched" value="no" id="movie-watched-no" checked />
+                <div class="radio-card-content">
+                  <span class="choice-title">🚫 No - Keep Spoiler-Free</span>
+                  <span class="choice-desc">Premise, cast, tone, trailer & streaming platforms only.</span>
+                </div>
+              </label>
+              <label class="movie-radio-card">
+                <input type="radio" name="movie_watched" value="yes" id="movie-watched-yes" />
+                <div class="radio-card-content">
+                  <span class="choice-title">✅ Yes - Full Discussion</span>
+                  <span class="choice-desc">Discuss endings, themes, twists, and character fates.</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="shield-card-actions">
+            <button type="button" class="btn-primary" id="btn-save-shield">Lock Spoiler Shield</button>
+            <button type="button" class="btn-danger-outline" id="btn-unlock-shield">Unlock spoilers</button>
+          </div>
+        </div>
       </div>
     </div>
+  </div>
+
+  <!-- Undo Toast Notification for Removed Shields (5s duration) -->
+  <div class="toast-undo hidden" id="toast-undo">
+    <span class="toast-undo-msg" id="toast-undo-msg">Removed show</span>
+    <button type="button" class="btn-toast-undo" id="btn-undo-action">Undo</button>
   </div>
 
   <!-- Vanilla App Script -->
