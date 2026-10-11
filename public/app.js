@@ -467,6 +467,41 @@ const dom = {
   toastUndo: document.getElementById('toast-undo'),
   toastUndoMsg: document.getElementById('toast-undo-msg'),
   btnUndoAction: document.getElementById('btn-undo-action'),
+
+  // Phase 4: Mood Picks
+  moodPicksContainer: document.getElementById('mood-picks-container'),
+  moodEntrySection: document.getElementById('mood-entry-section'),
+  moodCardsGrid: document.getElementById('mood-cards-grid'),
+  filterMediaChips: document.getElementById('filter-media-chips'),
+  filterTimeChips: document.getElementById('filter-time-chips'),
+  filterLangChips: document.getElementById('filter-lang-chips'),
+  filterPlatformChips: document.getElementById('filter-platform-chips'),
+  moodCustomInput: document.getElementById('mood-custom-input'),
+  btnFindMoodPicks: document.getElementById('btn-find-mood-picks'),
+  moodResultsSection: document.getElementById('mood-results-section'),
+  moodBotIntro: document.getElementById('mood-bot-intro'),
+  btnChangeMoodFilters: document.getElementById('btn-change-mood-filters'),
+  moodCardsLoading: document.getElementById('mood-cards-loading'),
+  moodCardsList: document.getElementById('mood-cards-list'),
+  moodFallbackBox: document.getElementById('mood-fallback-box'),
+  moodFallbackMsg: document.getElementById('mood-fallback-msg'),
+  btnLoosenFilters: document.getElementById('btn-loosen-filters'),
+  btnMoodMore: document.getElementById('btn-mood-more'),
+
+  // Phase 4: Compare & Debate
+  compareContainer: document.getElementById('compare-container'),
+  compareEntrySection: document.getElementById('compare-entry-section'),
+  compareResultsSection: document.getElementById('compare-results-section'),
+  compareLoadingState: document.getElementById('compare-loading-state'),
+  btnLaunchCompare: document.getElementById('btn-launch-compare'),
+  btnCompareReset: document.getElementById('btn-compare-reset'),
+  btnCompareSwap: document.getElementById('btn-compare-swap'),
+  btnCompareDebateToggle: document.getElementById('btn-compare-debate-toggle'),
+  debateContainer: document.getElementById('debate-container'),
+  btnEndDebate: document.getElementById('btn-end-debate'),
+  debateThread: document.getElementById('debate-thread'),
+  debateReplyForm: document.getElementById('debate-reply-form'),
+  debateReplyInput: document.getElementById('debate-reply-input'),
 };
 
 // ========================================================
@@ -475,6 +510,8 @@ const dom = {
 function init() {
   loadFromStorage();
   applyTheme(state.theme);
+  initMoodPicksState();
+  setupComparePickers();
   setMode(state.currentMode, false);
   onShieldsChanged();
   updateWatchlistBadge();
@@ -574,21 +611,36 @@ function getActiveSession() {
 function renderActiveSession() {
   const session = getActiveSession();
 
-  if (!session || !session.messages || session.messages.length === 0) {
-    dom.heroWelcome.classList.remove('hidden');
-    dom.messagesContainer.classList.add('hidden');
-    dom.messagesContainer.innerHTML = '';
-    updateWelcomeViewForMode(state.currentMode);
+  if (state.currentMode === 'mood-picks') {
+    if (dom.moodPicksContainer) dom.moodPicksContainer.classList.remove('hidden');
+    if (dom.compareContainer) dom.compareContainer.classList.add('hidden');
+    if (dom.heroWelcome) dom.heroWelcome.classList.add('hidden');
+    if (dom.messagesContainer) dom.messagesContainer.classList.add('hidden');
+  } else if (state.currentMode === 'compare') {
+    if (dom.compareContainer) dom.compareContainer.classList.remove('hidden');
+    if (dom.moodPicksContainer) dom.moodPicksContainer.classList.add('hidden');
+    if (dom.heroWelcome) dom.heroWelcome.classList.add('hidden');
+    if (dom.messagesContainer) dom.messagesContainer.classList.add('hidden');
   } else {
-    dom.heroWelcome.classList.add('hidden');
-    dom.messagesContainer.classList.remove('hidden');
-    dom.messagesContainer.innerHTML = '';
+    if (dom.moodPicksContainer) dom.moodPicksContainer.classList.add('hidden');
+    if (dom.compareContainer) dom.compareContainer.classList.add('hidden');
 
-    session.messages.forEach((msg) => {
-      appendMessageToDOM(msg.role, msg.content, false);
-    });
+    if (!session || !session.messages || session.messages.length === 0) {
+      dom.heroWelcome.classList.remove('hidden');
+      dom.messagesContainer.classList.add('hidden');
+      dom.messagesContainer.innerHTML = '';
+      updateWelcomeViewForMode(state.currentMode);
+    } else {
+      dom.heroWelcome.classList.add('hidden');
+      dom.messagesContainer.classList.remove('hidden');
+      dom.messagesContainer.innerHTML = '';
 
-    scrollToBottom();
+      session.messages.forEach((msg) => {
+        appendMessageToDOM(msg.role, msg.content, false);
+      });
+
+      scrollToBottom();
+    }
   }
 
   if (session && session.mode) {
@@ -845,11 +897,18 @@ function setControlsLocked(locked) {
     dom.btnOpenWatchlist,
     dom.btnClearHistory,
     dom.btnVoiceInput,
-    dom.spoilerShieldPill,
+    dom.btnFindMoodPicks,
+    dom.btnMoodMore,
+    dom.btnLaunchCompare,
+    dom.btnCompareReset,
+    dom.btnCompareSwap,
     ...document.querySelectorAll('.mode-item'),
     ...document.querySelectorAll('.hero-chip-btn'),
     ...document.querySelectorAll('.history-item'),
     ...document.querySelectorAll('.btn-delete-session'),
+    ...document.querySelectorAll('.mood-card'),
+    ...document.querySelectorAll('.chip-filter'),
+    ...document.querySelectorAll('.platform-chip'),
   ];
 
   elementsToLock.forEach((el) => {
@@ -888,6 +947,14 @@ async function handleChatSubmit(e) {
 
   const userText = dom.chatInput.value.trim();
   if (!userText) return;
+
+  // Check if user entered a comparison query like "Breaking Bad vs Better Call Saul"
+  const vsQuery = detectComparisonQuery(userText);
+  if (vsQuery) {
+    dom.chatInput.value = '';
+    loadComparisonByTitles(vsQuery.titleA, vsQuery.titleB);
+    return;
+  }
 
   // Immediately lock to prevent duplicate user bubbles from double-clicks or rapid Enters
   state.isGenerating = true;
@@ -1036,7 +1103,9 @@ async function handleChatSubmit(e) {
 
         try {
           const parsed = JSON.parse(dataStr);
-          if (parsed.text) {
+          if (parsed.type === 'title_inspector' && parsed.titleData) {
+            openTitleInspector(parsed.titleData);
+          } else if (parsed.text) {
             // First token arrives: remove typing dots and reveal cursor
             if (!firstTokenReceived) {
               firstTokenReceived = true;
@@ -1173,12 +1242,34 @@ function setMode(modeKey, saveSession = true) {
     dom.inputModeTag.textContent = `${data.icon} ${data.title}`;
   }
 
-  // If in empty hero state, update welcome view
-  const session = getActiveSession();
-  if (!session || !session.messages || session.messages.length === 0) {
-    updateWelcomeViewForMode(modeKey);
+  // Handle mode-specific views:
+  if (modeKey === 'mood-picks') {
+    if (dom.moodPicksContainer) dom.moodPicksContainer.classList.remove('hidden');
+    if (dom.compareContainer) dom.compareContainer.classList.add('hidden');
+    if (dom.heroWelcome) dom.heroWelcome.classList.add('hidden');
+    if (dom.messagesContainer) dom.messagesContainer.classList.add('hidden');
+    syncPlatformChipsUI();
+  } else if (modeKey === 'compare') {
+    if (dom.compareContainer) dom.compareContainer.classList.remove('hidden');
+    if (dom.moodPicksContainer) dom.moodPicksContainer.classList.add('hidden');
+    if (dom.heroWelcome) dom.heroWelcome.classList.add('hidden');
+    if (dom.messagesContainer) dom.messagesContainer.classList.add('hidden');
+  } else {
+    if (dom.moodPicksContainer) dom.moodPicksContainer.classList.add('hidden');
+    if (dom.compareContainer) dom.compareContainer.classList.add('hidden');
+
+    const session = getActiveSession();
+    if (!session || !session.messages || session.messages.length === 0) {
+      if (dom.heroWelcome) dom.heroWelcome.classList.remove('hidden');
+      if (dom.messagesContainer) dom.messagesContainer.classList.add('hidden');
+      updateWelcomeViewForMode(modeKey);
+    } else {
+      if (dom.heroWelcome) dom.heroWelcome.classList.add('hidden');
+      if (dom.messagesContainer) dom.messagesContainer.classList.remove('hidden');
+    }
   }
 
+  const session = getActiveSession();
   if (session && saveSession) {
     session.mode = modeKey;
     saveSessionsToStorage();
@@ -1186,7 +1277,7 @@ function setMode(modeKey, saveSession = true) {
 }
 
 // ========================================================
-// 11. WATCHLIST MODAL MANAGEMENT
+// 11. WATCHLIST MODAL MANAGEMENT (Upgraded with Posters & Details)
 // ========================================================
 function openWatchlistModal() {
   if (state.isGenerating) return;
@@ -1198,30 +1289,109 @@ function closeWatchlistModal() {
   dom.watchlistModal.classList.add('hidden');
 }
 
+function toggleWatchlist(itemObj) {
+  if (!itemObj) return false;
+  const targetId = itemObj.id ? String(itemObj.id) : null;
+  const targetTitle = String(itemObj.title || itemObj).toLowerCase();
+
+  const idx = state.watchlist.findIndex((w) => {
+    if (typeof w === 'object' && w !== null) {
+      if (targetId && String(w.id) === targetId) return true;
+      return String(w.title).toLowerCase() === targetTitle;
+    }
+    return String(w).toLowerCase() === targetTitle;
+  });
+
+  let isSaved = false;
+  if (idx >= 0) {
+    state.watchlist.splice(idx, 1);
+    isSaved = false;
+  } else {
+    state.watchlist.unshift({
+      id: itemObj.id || null,
+      title: itemObj.title || String(itemObj),
+      type: itemObj.type || itemObj.media_type || 'movie',
+      year: itemObj.year || '',
+      poster: itemObj.poster_url || itemObj.poster_path || itemObj.poster || null,
+      rating: itemObj.tmdb_rating || itemObj.rating || null,
+      imdb_rating: itemObj.imdb_rating || null,
+    });
+    isSaved = true;
+  }
+
+  localStorage.setItem(STORAGE_KEYS.WATCHLIST, JSON.stringify(state.watchlist));
+  updateWatchlistBadge();
+  renderWatchlistItems();
+  return isSaved;
+}
+
+function isItemInWatchlist(itemObj) {
+  if (!itemObj) return false;
+  const targetId = itemObj.id ? String(itemObj.id) : null;
+  const targetTitle = String(itemObj.title || itemObj).toLowerCase();
+
+  return state.watchlist.some((w) => {
+    if (typeof w === 'object' && w !== null) {
+      if (targetId && String(w.id) === targetId) return true;
+      return String(w.title).toLowerCase() === targetTitle;
+    }
+    return String(w).toLowerCase() === targetTitle;
+  });
+}
+
 function renderWatchlistItems() {
   if (state.watchlist.length === 0) {
-    dom.watchlistList.innerHTML = '<div class="watchlist-empty">Nothing saved yet.</div>';
+    dom.watchlistList.innerHTML = '<div class="watchlist-empty">Nothing saved yet. Add picks from Mood Picks or search!</div>';
     return;
   }
 
   dom.watchlistList.innerHTML = state.watchlist
-    .map(
-      (item, index) => `
-      <div class="watchlist-item">
-        <span class="watchlist-item-title">${escapeHtml(item)}</span>
-        <button class="watchlist-item-remove" data-index="${index}" title="Remove">✕</button>
-      </div>
-    `
-    )
+    .map((item, index) => {
+      const isObj = typeof item === 'object' && item !== null;
+      const title = isObj ? item.title : item;
+      const year = isObj && item.year ? `(${item.year})` : '';
+      const poster = isObj && item.poster ? item.poster : null;
+      const rating = isObj && item.imdb_rating ? `⭐ ${item.imdb_rating}` : (isObj && item.rating ? `🎬 ${item.rating}` : '');
+
+      return `
+        <div class="watchlist-item-rich">
+          <div class="wl-left">
+            ${poster ? `<img class="wl-poster" src="${escapeHtml(poster)}" alt="" />` : `<div class="wl-poster" style="display:flex;align-items:center;justify-content:center;font-size:16px;">🎬</div>`}
+            <div class="wl-meta">
+              <span class="wl-title" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+              <span class="wl-sub">${escapeHtml(year)} ${escapeHtml(rating)}</span>
+            </div>
+          </div>
+          <div class="wl-actions">
+            ${isObj && item.id ? `<button type="button" class="btn-wl-inspect" data-index="${index}" title="View Details">Details</button>` : ''}
+            <button type="button" class="btn-wl-remove" data-index="${index}" title="Remove">✕</button>
+          </div>
+        </div>
+      `;
+    })
     .join('');
 
-  dom.watchlistList.querySelectorAll('.watchlist-item-remove').forEach((btn) => {
+  dom.watchlistList.querySelectorAll('.btn-wl-remove').forEach((btn) => {
     btn.addEventListener('click', (e) => {
-      const idx = parseInt(e.target.dataset.index, 10);
+      const idx = parseInt(e.currentTarget.dataset.index, 10);
       state.watchlist.splice(idx, 1);
       localStorage.setItem(STORAGE_KEYS.WATCHLIST, JSON.stringify(state.watchlist));
       updateWatchlistBadge();
       renderWatchlistItems();
+      if (typeof updateMoodCardWatchlistButtons === 'function') {
+        updateMoodCardWatchlistButtons();
+      }
+    });
+  });
+
+  dom.watchlistList.querySelectorAll('.btn-wl-inspect').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(e.currentTarget.dataset.index, 10);
+      const item = state.watchlist[idx];
+      if (item && item.id) {
+        closeWatchlistModal();
+        openTitleInspector(item.id, item.type || 'movie');
+      }
     });
   });
 }
@@ -1229,6 +1399,96 @@ function renderWatchlistItems() {
 function updateWatchlistBadge() {
   if (dom.watchlistCount) {
     dom.watchlistCount.textContent = state.watchlist.length;
+  }
+}
+
+// ========================================================
+// 11.1 TITLE INSPECTOR (Opens on Details button)
+// ========================================================
+async function openTitleInspector(mediaDataOrId, type = 'movie') {
+  if (!dom.inspectorPanel) return;
+
+  dom.inspectorPanel.classList.remove('collapsed');
+
+  const placeholderEl = document.getElementById('inspector-placeholder');
+  const skeletonEl = document.getElementById('inspector-skeleton');
+  const cardActiveEl = document.getElementById('inspector-card-active');
+
+  if (placeholderEl) placeholderEl.classList.add('hidden');
+  if (cardActiveEl) cardActiveEl.classList.add('hidden');
+  if (skeletonEl) skeletonEl.classList.remove('hidden');
+
+  let data = null;
+  if (typeof mediaDataOrId === 'object' && mediaDataOrId !== null && mediaDataOrId.title) {
+    data = mediaDataOrId;
+  } else {
+    try {
+      const res = await fetch(`/api/media/details?id=${encodeURIComponent(mediaDataOrId)}&type=${encodeURIComponent(type)}`);
+      data = await res.json();
+    } catch (e) {
+      console.warn('Failed to fetch title inspector details:', e);
+    }
+  }
+
+  if (skeletonEl) skeletonEl.classList.add('hidden');
+
+  if (!data || data.error) {
+    if (placeholderEl) placeholderEl.classList.remove('hidden');
+    return;
+  }
+
+  if (cardActiveEl) {
+    cardActiveEl.classList.remove('hidden');
+
+    const posterHtml = data.poster_url
+      ? `<div class="inspector-poster-container"><img class="inspector-poster" src="${escapeHtml(data.poster_url)}" alt="${escapeHtml(data.title)}" /></div>`
+      : `<div class="inspector-poster-container"><div class="inspector-poster-placeholder">🎬</div></div>`;
+
+    const genresHtml = (data.genres || [])
+      .map((g) => `<span class="genre-pill">${escapeHtml(typeof g === 'string' ? g : g.name)}</span>`)
+      .join('');
+
+    const inProviders = data.watch_providers_in?.flatrate || [];
+    const providersHtml = inProviders.length > 0
+      ? inProviders.map((p) => `<span class="watch-badge">📺 ${escapeHtml(p)}</span>`).join('')
+      : `<span style="font-size:12px;color:var(--text-muted)">Not currently streaming in India</span>`;
+
+    const castHtml = (data.cast || []).slice(0, 6)
+      .map((c) => `<span class="cast-chip">${escapeHtml(c.name)}</span>`)
+      .join('');
+
+    cardActiveEl.innerHTML = `
+      ${posterHtml}
+      <div class="inspector-card-title">${escapeHtml(data.title)} <span class="inspector-year">(${escapeHtml(data.year || '')})</span></div>
+
+      <div class="inspector-ratings-row">
+        ${data.imdb_rating ? `<span class="badge-rating imdb">⭐ IMDb ${escapeHtml(String(data.imdb_rating))}</span>` : ''}
+        ${data.tmdb_rating ? `<span class="badge-rating tmdb">🎬 TMDB ${escapeHtml(String(data.tmdb_rating))}</span>` : ''}
+        ${data.duration ? `<span class="badge-rating duration">⏱️ ${escapeHtml(data.duration)}</span>` : ''}
+      </div>
+
+      ${genresHtml ? `<div class="inspector-genres">${genresHtml}</div>` : ''}
+
+      ${data.overview ? `<div class="inspector-overview">${escapeHtml(data.overview)}</div>` : ''}
+
+      <div class="inspector-section">
+        <strong>Where to Watch (India)</strong>
+        <div class="watch-badges">${providersHtml}</div>
+      </div>
+
+      ${castHtml ? `
+        <div class="inspector-section">
+          <strong>Key Cast</strong>
+          <div class="cast-chips">${castHtml}</div>
+        </div>
+      ` : ''}
+
+      ${data.trailer_url ? `
+        <a href="${escapeHtml(data.trailer_url)}" target="_blank" rel="noopener noreferrer" class="btn-trailer">
+          ▶ Watch Trailer
+        </a>
+      ` : ''}
+    `;
   }
 }
 
@@ -2187,6 +2447,996 @@ function bindEvents() {
 
   // Voice Input
   setupVoiceInput();
+
+  // Phase 4: Mood Picks event bindings
+  setupMoodPicksEvents();
+}
+
+// ========================================================
+// 17. PHASE 4: MOOD PICKS APPLICATION LOGIC
+// ========================================================
+const moodState = {
+  selectedMood: 'Cozy',
+  mediaType: 'any',
+  timeLimit: 'any',
+  language: 'Any',
+  platforms: [],
+  sessionExcludeIds: [],
+  currentPicks: [],
+};
+
+function initMoodPicksState() {
+  try {
+    const saved = localStorage.getItem('kinora_platforms');
+    if (saved) {
+      moodState.platforms = JSON.parse(saved);
+    }
+  } catch {}
+  syncPlatformChipsUI();
+}
+
+function syncPlatformChipsUI() {
+  const chips = document.querySelectorAll('.platform-chip');
+  chips.forEach((c) => {
+    const p = c.dataset.platform;
+    c.classList.toggle('selected', moodState.platforms.includes(p));
+  });
+}
+
+function setupMoodPicksEvents() {
+  // Mood cards grid
+  if (dom.moodCardsGrid) {
+    dom.moodCardsGrid.addEventListener('click', (e) => {
+      if (state.isGenerating) return;
+      const card = e.target.closest('.mood-card');
+      if (!card) return;
+      dom.moodCardsGrid.querySelectorAll('.mood-card').forEach((c) => c.classList.remove('active'));
+      card.classList.add('active');
+      moodState.selectedMood = card.dataset.mood || 'Cozy';
+      fetchMoodPicks(false);
+    });
+  }
+
+  // Filter chips: Media
+  if (dom.filterMediaChips) {
+    dom.filterMediaChips.addEventListener('click', (e) => {
+      if (state.isGenerating) return;
+      const chip = e.target.closest('.chip-filter');
+      if (!chip) return;
+      dom.filterMediaChips.querySelectorAll('.chip-filter').forEach((c) => c.classList.remove('active'));
+      chip.classList.add('active');
+      moodState.mediaType = chip.dataset.val || 'any';
+      fetchMoodPicks(false);
+    });
+  }
+
+  // Filter chips: Time
+  if (dom.filterTimeChips) {
+    dom.filterTimeChips.addEventListener('click', (e) => {
+      if (state.isGenerating) return;
+      const chip = e.target.closest('.chip-filter');
+      if (!chip) return;
+      dom.filterTimeChips.querySelectorAll('.chip-filter').forEach((c) => c.classList.remove('active'));
+      chip.classList.add('active');
+      moodState.timeLimit = chip.dataset.val || 'any';
+      fetchMoodPicks(false);
+    });
+  }
+
+  // Filter chips: Language
+  if (dom.filterLangChips) {
+    dom.filterLangChips.addEventListener('click', (e) => {
+      if (state.isGenerating) return;
+      const chip = e.target.closest('.chip-filter');
+      if (!chip) return;
+      dom.filterLangChips.querySelectorAll('.chip-filter').forEach((c) => c.classList.remove('active'));
+      chip.classList.add('active');
+      moodState.language = chip.dataset.val || 'Any';
+      fetchMoodPicks(false);
+    });
+  }
+
+  // Filter chips: Platforms multi-select
+  if (dom.filterPlatformChips) {
+    dom.filterPlatformChips.addEventListener('click', (e) => {
+      if (state.isGenerating) return;
+      const chip = e.target.closest('.platform-chip');
+      if (!chip) return;
+      const platformName = chip.dataset.platform;
+      const idx = moodState.platforms.indexOf(platformName);
+      if (idx >= 0) {
+        moodState.platforms.splice(idx, 1);
+        chip.classList.remove('selected');
+      } else {
+        moodState.platforms.push(platformName);
+        chip.classList.add('selected');
+      }
+      localStorage.setItem('kinora_platforms', JSON.stringify(moodState.platforms));
+      fetchMoodPicks(false);
+    });
+  }
+
+  // Natural language custom mood input
+  if (dom.btnFindMoodPicks) {
+    dom.btnFindMoodPicks.addEventListener('click', () => {
+      if (!state.isGenerating) fetchMoodPicks(false);
+    });
+  }
+  if (dom.moodCustomInput) {
+    dom.moodCustomInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (!state.isGenerating) fetchMoodPicks(false);
+      }
+    });
+  }
+
+  // Change / Edit filters button
+  if (dom.btnChangeMoodFilters) {
+    dom.btnChangeMoodFilters.addEventListener('click', () => {
+      if (dom.moodEntrySection) {
+        dom.moodEntrySection.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+  }
+
+  // Loosen filters button
+  if (dom.btnLoosenFilters) {
+    dom.btnLoosenFilters.addEventListener('click', () => {
+      moodState.language = 'Any';
+      moodState.timeLimit = 'any';
+      if (dom.filterLangChips) {
+        dom.filterLangChips.querySelectorAll('.chip-filter').forEach((c) => {
+          c.classList.toggle('active', c.dataset.val === 'Any');
+        });
+      }
+      if (dom.filterTimeChips) {
+        dom.filterTimeChips.querySelectorAll('.chip-filter').forEach((c) => {
+          c.classList.toggle('active', c.dataset.val === 'any');
+        });
+      }
+      fetchMoodPicks(false);
+    });
+  }
+
+  // "Show me 3 more" button
+  if (dom.btnMoodMore) {
+    dom.btnMoodMore.addEventListener('click', () => {
+      if (!state.isGenerating) fetchMoodPicks(true);
+    });
+  }
+}
+
+async function fetchMoodPicks(isMore = false) {
+  if (state.isGenerating) return;
+
+  const resultsSec = dom.moodResultsSection;
+  const loadingSec = dom.moodCardsLoading;
+  const cardsList = dom.moodCardsList;
+  const fallbackBox = dom.moodFallbackBox;
+  const introEl = dom.moodBotIntro;
+  const customMood = dom.moodCustomInput ? dom.moodCustomInput.value.trim() : '';
+
+  if (!isMore) {
+    moodState.sessionExcludeIds = [];
+    moodState.currentPicks = [];
+  }
+
+  if (resultsSec) resultsSec.classList.remove('hidden');
+  if (fallbackBox) fallbackBox.classList.add('hidden');
+  if (loadingSec) loadingSec.classList.remove('hidden');
+  if (!isMore && cardsList) cardsList.innerHTML = '';
+
+  try {
+    const res = await fetch('/api/mood-picks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mood: moodState.selectedMood,
+        mediaType: moodState.mediaType,
+        timeLimit: moodState.timeLimit,
+        language: moodState.language,
+        platforms: moodState.platforms,
+        customMood,
+        excludeIds: moodState.sessionExcludeIds,
+        shields: ShieldsStore.getAll(),
+        count: 3,
+      }),
+    });
+
+    const data = await res.json();
+    if (loadingSec) loadingSec.classList.add('hidden');
+
+    if (data.fallbackMessage && (!data.picks || data.picks.length === 0)) {
+      if (fallbackBox) {
+        fallbackBox.classList.remove('hidden');
+        if (dom.moodFallbackMsg) dom.moodFallbackMsg.textContent = data.fallbackMessage;
+      }
+      return;
+    }
+
+    if (introEl && data.intro) {
+      introEl.textContent = data.intro;
+    }
+
+    const picks = Array.isArray(data.picks) ? data.picks : [];
+    picks.forEach((p) => {
+      if (p.id) moodState.sessionExcludeIds.push(p.id);
+    });
+
+    moodState.currentPicks = picks;
+    renderMoodPicksCards(picks);
+
+    if (resultsSec) {
+      resultsSec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  } catch (err) {
+    if (loadingSec) loadingSec.classList.add('hidden');
+    console.error('Mood picks error:', err);
+    if (fallbackBox) {
+      fallbackBox.classList.remove('hidden');
+      if (dom.moodFallbackMsg) {
+        dom.moodFallbackMsg.textContent = 'Kinora had trouble fetching picks. Please check your connection and try again.';
+      }
+    }
+  }
+}
+
+function renderMoodPicksCards(picks) {
+  const cardsList = dom.moodCardsList;
+  if (!cardsList) return;
+
+  cardsList.innerHTML = picks
+    .map((p, idx) => {
+      const inWl = isItemInWatchlist(p);
+      const inProviders = p.watch_providers_in?.flatrate_details || [];
+      const providerTags = inProviders.length > 0
+        ? inProviders.slice(0, 3).map((pr) => `
+            <span class="provider-tag">
+              ${pr.logo ? `<img class="provider-logo-img" src="${escapeHtml(pr.logo)}" alt="" />` : ''}
+              ${escapeHtml(pr.name)}
+            </span>
+          `).join('')
+        : `<span style="font-size:11px;color:var(--text-muted)">Streaming info in Details</span>`;
+
+      return `
+        <div class="mood-pick-card" id="mood-card-${idx}">
+          <div class="pick-poster-wrap">
+            ${p.poster_url ? `<img class="pick-poster" src="${escapeHtml(p.poster_url)}" alt="${escapeHtml(p.title)}" />` : `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:32px;">🎬</div>`}
+          </div>
+          <div class="pick-details">
+            <div>
+              <div class="pick-title-row">
+                <span class="pick-title">${escapeHtml(p.title)}</span>
+                <span class="pick-year">(${escapeHtml(p.year || '')})</span>
+              </div>
+              <div class="pick-meta-row" style="margin-top:4px;">
+                ${p.imdb_rating ? `<span class="badge-rating imdb">⭐ IMDb ${escapeHtml(String(p.imdb_rating))}</span>` : ''}
+                ${p.tmdb_rating ? `<span class="badge-rating tmdb">🎬 TMDB ${escapeHtml(String(p.tmdb_rating))}</span>` : ''}
+                ${p.duration ? `<span class="badge-rating duration">⏱️ ${escapeHtml(p.duration)}</span>` : ''}
+              </div>
+              <div class="pick-blurb">${escapeHtml(p.why_fits)}</div>
+              <div class="pick-providers-row">
+                <span>Watch in India:</span>
+                <div class="provider-logos-list">${providerTags}</div>
+              </div>
+            </div>
+            <div class="pick-actions-row">
+              <button type="button" class="btn-pick-action btn-add-wl ${inWl ? 'saved' : ''}" data-pick-idx="${idx}">
+                ${inWl ? '✓ Saved' : '+ Add to Watchlist'}
+              </button>
+              <button type="button" class="btn-pick-action btn-pick-details" data-pick-idx="${idx}">
+                Details
+              </button>
+              <button type="button" class="btn-pick-action btn-not-for-me" data-pick-idx="${idx}">
+                Not for me
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  cardsList.querySelectorAll('.btn-add-wl').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(e.currentTarget.dataset.pickIdx, 10);
+      const pick = moodState.currentPicks[idx];
+      if (pick) {
+        const isSaved = toggleWatchlist(pick);
+        e.currentTarget.classList.toggle('saved', isSaved);
+        e.currentTarget.textContent = isSaved ? '✓ Saved' : '+ Add to Watchlist';
+      }
+    });
+  });
+
+  cardsList.querySelectorAll('.btn-pick-details').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(e.currentTarget.dataset.pickIdx, 10);
+      const pick = moodState.currentPicks[idx];
+      if (pick) {
+        openTitleInspector(pick);
+      }
+    });
+  });
+
+  cardsList.querySelectorAll('.btn-not-for-me').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      const idx = parseInt(e.currentTarget.dataset.pickIdx, 10);
+      const cardEl = document.getElementById(`mood-card-${idx}`);
+      if (cardEl) {
+        cardEl.style.opacity = '0.3';
+      }
+      await replaceSingleMoodPick(idx);
+    });
+  });
+}
+
+function updateMoodCardWatchlistButtons() {
+  const cardsList = dom.moodCardsList;
+  if (!cardsList) return;
+  cardsList.querySelectorAll('.btn-add-wl').forEach((btn) => {
+    const idx = parseInt(btn.dataset.pickIdx, 10);
+    const pick = moodState.currentPicks[idx];
+    if (pick) {
+      const inWl = isItemInWatchlist(pick);
+      btn.classList.toggle('saved', inWl);
+      btn.textContent = inWl ? '✓ Saved' : '+ Add to Watchlist';
+    }
+  });
+}
+
+async function replaceSingleMoodPick(replaceIdx) {
+  try {
+    const customMood = dom.moodCustomInput ? dom.moodCustomInput.value.trim() : '';
+
+    const res = await fetch('/api/mood-picks/replace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mood: moodState.selectedMood,
+        mediaType: moodState.mediaType,
+        timeLimit: moodState.timeLimit,
+        language: moodState.language,
+        platforms: moodState.platforms,
+        customMood,
+        excludeIds: moodState.sessionExcludeIds,
+        shields: ShieldsStore.getAll(),
+        count: 1,
+      }),
+    });
+    const data = await res.json();
+    if (data && Array.isArray(data.picks) && data.picks[0]) {
+      const newPick = data.picks[0];
+      moodState.sessionExcludeIds.push(newPick.id);
+      moodState.currentPicks[replaceIdx] = newPick;
+      renderMoodPicksCards(moodState.currentPicks);
+    } else {
+      moodState.currentPicks.splice(replaceIdx, 1);
+      renderMoodPicksCards(moodState.currentPicks);
+    }
+  } catch (err) {
+    console.warn('Failed to replace mood pick:', err);
+  }
+}
+
+// ========================================================
+// 18. PHASE 4: COMPARE & DEBATE APPLICATION LOGIC
+// ========================================================
+const compareState = {
+  selectedA: null,
+  selectedB: null,
+  currentComparison: null,
+  debate: {
+    active: false,
+    userChoice: null,
+    history: [],
+  },
+};
+
+let compareSearchTimerA = null;
+let compareSearchTimerB = null;
+
+function setupComparePickers() {
+  const inputA = document.getElementById('compare-search-a');
+  const inputB = document.getElementById('compare-search-b');
+
+  if (inputA) {
+    inputA.addEventListener('input', (e) => {
+      clearTimeout(compareSearchTimerA);
+      const val = e.target.value.trim();
+      compareSearchTimerA = setTimeout(() => searchCompareTitles(val, 'a'), 250);
+    });
+  }
+
+  if (inputB) {
+    inputB.addEventListener('input', (e) => {
+      clearTimeout(compareSearchTimerB);
+      const val = e.target.value.trim();
+      compareSearchTimerB = setTimeout(() => searchCompareTitles(val, 'b'), 250);
+    });
+  }
+
+  const btnClearA = document.getElementById('btn-clear-title-a');
+  const btnClearB = document.getElementById('btn-clear-title-b');
+  if (btnClearA) {
+    btnClearA.addEventListener('click', () => resetCompareSide('a'));
+  }
+  if (btnClearB) {
+    btnClearB.addEventListener('click', () => resetCompareSide('b'));
+  }
+
+  if (dom.btnLaunchCompare) {
+    dom.btnLaunchCompare.addEventListener('click', () => {
+      if (compareState.selectedA && compareState.selectedB) {
+        launchComparison();
+      }
+    });
+  }
+
+  if (dom.btnCompareReset) {
+    dom.btnCompareReset.addEventListener('click', resetCompareView);
+  }
+
+  if (dom.btnCompareSwap) {
+    dom.btnCompareSwap.addEventListener('click', swapCompareSides);
+  }
+
+  if (dom.btnCompareDebateToggle) {
+    dom.btnCompareDebateToggle.addEventListener('click', toggleDebateSection);
+  }
+
+  if (dom.btnEndDebate) {
+    dom.btnEndDebate.addEventListener('click', endDebateSession);
+  }
+
+  const btnChooseA = document.getElementById('btn-choose-a');
+  const btnChooseB = document.getElementById('btn-choose-b');
+  if (btnChooseA) {
+    btnChooseA.addEventListener('click', () => startDebateWithChoice('A'));
+  }
+  if (btnChooseB) {
+    btnChooseB.addEventListener('click', () => startDebateWithChoice('B'));
+  }
+
+  if (dom.debateReplyForm) {
+    dom.debateReplyForm.addEventListener('submit', handleDebateReply);
+  }
+}
+
+async function searchCompareTitles(query, side) {
+  const dropdown = document.getElementById(`compare-results-${side}`);
+  if (!dropdown) return;
+
+  if (!query || query.length < 2) {
+    dropdown.innerHTML = '';
+    dropdown.classList.add('hidden');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/media/search?query=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    const results = (data && Array.isArray(data.results)) ? data.results.slice(0, 5) : [];
+
+    if (results.length === 0) {
+      dropdown.innerHTML = '<div style="padding:10px;font-size:12px;color:var(--text-muted)">No titles found</div>';
+      dropdown.classList.remove('hidden');
+      return;
+    }
+
+    dropdown.innerHTML = results
+      .map(
+        (r, i) => `
+        <div class="compare-result-item" data-index="${i}">
+          ${r.poster_path ? `<img class="compare-result-poster" src="${escapeHtml(r.poster_path)}" alt="" />` : `<div class="compare-result-poster" style="display:flex;align-items:center;justify-content:center;font-size:12px;">🎬</div>`}
+          <div>
+            <div class="compare-result-title">${escapeHtml(r.title)}</div>
+            <div class="compare-result-year">${escapeHtml(r.year || '')} • ${escapeHtml(r.media_type || 'movie')}</div>
+          </div>
+        </div>
+      `
+      )
+      .join('');
+
+    dropdown.classList.remove('hidden');
+
+    dropdown.querySelectorAll('.compare-result-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        const idx = parseInt(item.dataset.index, 10);
+        selectCompareTitle(results[idx], side);
+      });
+    });
+  } catch (err) {
+    console.warn('Search compare error:', err);
+  }
+}
+
+function selectCompareTitle(mediaItem, side) {
+  const dropdown = document.getElementById(`compare-results-${side}`);
+  if (dropdown) dropdown.classList.add('hidden');
+
+  const searchBox = document.getElementById(`picker-search-box-${side}`);
+  const preview = document.getElementById(`picker-preview-${side}`);
+  const poster = document.getElementById(`preview-poster-${side}`);
+  const titleEl = document.getElementById(`preview-title-${side}`);
+  const yearEl = document.getElementById(`preview-year-${side}`);
+  const btnClear = document.getElementById(`btn-clear-title-${side}`);
+
+  if (side === 'a') compareState.selectedA = mediaItem;
+  else compareState.selectedB = mediaItem;
+
+  if (searchBox) searchBox.classList.add('hidden');
+  if (preview) preview.classList.remove('hidden');
+  if (btnClear) btnClear.classList.remove('hidden');
+
+  if (poster) poster.src = mediaItem.poster_path || '';
+  if (titleEl) titleEl.textContent = mediaItem.title;
+  if (yearEl) yearEl.textContent = `${mediaItem.year || ''} • ${(mediaItem.media_type || 'movie').toUpperCase()}`;
+
+  checkLaunchButtonState();
+}
+
+function resetCompareSide(side) {
+  if (side === 'a') compareState.selectedA = null;
+  else compareState.selectedB = null;
+
+  const searchBox = document.getElementById(`picker-search-box-${side}`);
+  const preview = document.getElementById(`picker-preview-${side}`);
+  const btnClear = document.getElementById(`btn-clear-title-${side}`);
+  const input = document.getElementById(`compare-search-${side}`);
+
+  if (searchBox) searchBox.classList.remove('hidden');
+  if (preview) preview.classList.add('hidden');
+  if (btnClear) btnClear.classList.add('hidden');
+  if (input) {
+    input.value = '';
+    input.focus();
+  }
+
+  checkLaunchButtonState();
+}
+
+function checkLaunchButtonState() {
+  if (dom.btnLaunchCompare) {
+    dom.btnLaunchCompare.disabled = !(compareState.selectedA && compareState.selectedB);
+  }
+}
+
+function resetCompareView() {
+  const entrySec = dom.compareEntrySection;
+  const resultsSec = dom.compareResultsSection;
+  const debateSec = dom.debateContainer;
+
+  if (entrySec) entrySec.classList.remove('hidden');
+  if (resultsSec) resultsSec.classList.add('hidden');
+  if (debateSec) debateSec.classList.add('hidden');
+
+  compareState.currentComparison = null;
+  compareState.debate = { active: false, userChoice: null, history: [] };
+}
+
+async function launchComparison(titleAObj = null, titleBObj = null) {
+  const itemA = titleAObj || compareState.selectedA;
+  const itemB = titleBObj || compareState.selectedB;
+  if (!itemA || !itemB) return;
+
+  const entrySec = dom.compareEntrySection;
+  const loadingSec = dom.compareLoadingState;
+  const resultsSec = dom.compareResultsSection;
+
+  if (entrySec) entrySec.classList.add('hidden');
+  if (resultsSec) resultsSec.classList.add('hidden');
+  if (loadingSec) loadingSec.classList.remove('hidden');
+
+  try {
+    const res = await fetch('/api/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        titleA: itemA.title,
+        idA: itemA.id,
+        typeA: itemA.media_type || itemA.type || 'movie',
+        titleB: itemB.title,
+        idB: itemB.id,
+        typeB: itemB.media_type || itemB.type || 'movie',
+        shields: ShieldsStore.getAll(),
+      }),
+    });
+
+    const data = await res.json();
+    if (loadingSec) loadingSec.classList.add('hidden');
+
+    if (data.error) {
+      alert(data.error);
+      if (entrySec) entrySec.classList.remove('hidden');
+      return;
+    }
+
+    compareState.currentComparison = data;
+    renderComparisonView(data);
+    if (resultsSec) resultsSec.classList.remove('hidden');
+  } catch (err) {
+    if (loadingSec) loadingSec.classList.add('hidden');
+    console.error('Launch compare error:', err);
+    if (entrySec) entrySec.classList.remove('hidden');
+  }
+}
+
+function renderComparisonView(data) {
+  const { itemA, itemB, verdict } = data;
+
+  const heroesContainer = document.getElementById('compare-heroes-container');
+  if (heroesContainer) {
+    heroesContainer.innerHTML = `
+      <div class="compare-hero-card">
+        ${itemA.poster_url ? `<img class="hero-poster" src="${escapeHtml(itemA.poster_url)}" alt="${escapeHtml(itemA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
+        <div class="hero-info">
+          <span class="picker-badge">Title A</span>
+          <h3 class="hero-title">${escapeHtml(itemA.title)}</h3>
+          <span class="hero-year-badge">${escapeHtml(itemA.year || '')} • ${(itemA.type || 'movie').toUpperCase()}</span>
+        </div>
+      </div>
+      <div class="compare-hero-card">
+        ${itemB.poster_url ? `<img class="hero-poster" src="${escapeHtml(itemB.poster_url)}" alt="${escapeHtml(itemB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
+        <div class="hero-info">
+          <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">Title B</span>
+          <h3 class="hero-title">${escapeHtml(itemB.title)}</h3>
+          <span class="hero-year-badge">${escapeHtml(itemB.year || '')} • ${(itemB.type || 'movie').toUpperCase()}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  const thA = document.getElementById('th-title-a');
+  const thB = document.getElementById('th-title-b');
+  if (thA) thA.textContent = itemA.title;
+  if (thB) thB.textContent = itemB.title;
+
+  const tbody = document.getElementById('compare-table-body');
+  if (tbody) {
+    const imdbA = parseFloat(itemA.imdb_rating) || 0;
+    const imdbB = parseFloat(itemB.imdb_rating) || 0;
+    const votesA = parseInt(String(itemA.imdb_votes || '0').replace(/,/g, ''), 10) || 0;
+    const votesB = parseInt(String(itemB.imdb_votes || '0').replace(/,/g, ''), 10) || 0;
+    const tmdbA = parseFloat(itemA.tmdb_rating) || 0;
+    const tmdbB = parseFloat(itemB.tmdb_rating) || 0;
+
+    const streamA = itemA.watch_providers_in?.flatrate?.join(', ') || 'Rent/Buy or unlisted';
+    const streamB = itemB.watch_providers_in?.flatrate?.join(', ') || 'Rent/Buy or unlisted';
+    const genresA = (itemA.genres || []).join(', ');
+    const genresB = (itemB.genres || []).join(', ');
+
+    tbody.innerHTML = `
+      <tr>
+        <td class="col-metric">IMDb Rating</td>
+        <td><span class="${imdbA > imdbB ? 'better-val' : ''}">⭐ ${itemA.imdb_rating || 'N/A'}</span></td>
+        <td><span class="${imdbB > imdbA ? 'better-val' : ''}">⭐ ${itemB.imdb_rating || 'N/A'}</span></td>
+      </tr>
+      <tr>
+        <td class="col-metric">IMDb Votes</td>
+        <td><span class="${votesA > votesB ? 'better-val' : ''}">${itemA.imdb_votes || 'N/A'}</span></td>
+        <td><span class="${votesB > votesA ? 'better-val' : ''}">${itemB.imdb_votes || 'N/A'}</span></td>
+      </tr>
+      <tr>
+        <td class="col-metric">TMDB Rating</td>
+        <td><span class="${tmdbA > tmdbB ? 'better-val' : ''}">🎬 ${itemA.tmdb_rating ? itemA.tmdb_rating.toFixed(1) : 'N/A'}</span></td>
+        <td><span class="${tmdbB > tmdbA ? 'better-val' : ''}">🎬 ${itemB.tmdb_rating ? itemB.tmdb_rating.toFixed(1) : 'N/A'}</span></td>
+      </tr>
+      <tr>
+        <td class="col-metric">Runtime / Seasons</td>
+        <td>${escapeHtml(itemA.duration || 'N/A')}</td>
+        <td>${escapeHtml(itemB.duration || 'N/A')}</td>
+      </tr>
+      <tr>
+        <td class="col-metric">Genres</td>
+        <td>${escapeHtml(genresA)}</td>
+        <td>${escapeHtml(genresB)}</td>
+      </tr>
+      <tr>
+        <td class="col-metric">Status</td>
+        <td>${escapeHtml(itemA.status || 'Released')}</td>
+        <td>${escapeHtml(itemB.status || 'Released')}</td>
+      </tr>
+      <tr>
+        <td class="col-metric">Watch in India</td>
+        <td><span style="font-size:12.5px;color:var(--text-secondary);">${escapeHtml(streamA)}</span></td>
+        <td><span style="font-size:12.5px;color:var(--text-secondary);">${escapeHtml(streamB)}</span></td>
+      </tr>
+    `;
+  }
+
+  const catGrid = document.getElementById('verdict-categories-grid');
+  if (catGrid && verdict?.categories) {
+    const cats = [
+      { key: 'story', label: 'Story' },
+      { key: 'acting', label: 'Acting' },
+      { key: 'pacing', label: 'Pacing' },
+      { key: 'rewatch_value', label: 'Rewatch value' },
+      { key: 'cultural_impact', label: 'Cultural impact' },
+    ];
+
+    catGrid.innerHTML = cats
+      .map(({ key, label }) => {
+        const catData = verdict.categories[key] || { winner: 'Tie', reason: 'Balanced craft.' };
+        const win = catData.winner || 'Tie';
+        let winClass = 'winner-tie';
+        let winLabel = '🤝 Tie';
+        if (win === 'A') {
+          winClass = 'winner-a';
+          winLabel = `🏆 ${itemA.title}`;
+        } else if (win === 'B') {
+          winClass = 'winner-b';
+          winLabel = `🏆 ${itemB.title}`;
+        }
+
+        return `
+          <div class="verdict-cat-card">
+            <span class="cat-label">${label}</span>
+            <span class="cat-winner ${winClass}">${escapeHtml(winLabel)}</span>
+            <span class="cat-reason">${escapeHtml(catData.reason || '')}</span>
+          </div>
+        `;
+      })
+      .join('');
+  }
+
+  const overallEl = document.getElementById('verdict-overall');
+  if (overallEl) {
+    overallEl.textContent = verdict?.overall || `${itemA.title} and ${itemB.title} are landmark works in cinema and television.`;
+  }
+
+  const watchIfGrid = document.getElementById('verdict-watch-if-grid');
+  if (watchIfGrid) {
+    watchIfGrid.innerHTML = `
+      <div class="watch-if-card">
+        <strong>${escapeHtml(itemA.title)}</strong>
+        ${escapeHtml(verdict?.watch_a_if || `Watch if you want compelling thrills and iconic moments.`)}
+      </div>
+      <div class="watch-if-card">
+        <strong>${escapeHtml(itemB.title)}</strong>
+        ${escapeHtml(verdict?.watch_b_if || `Watch if you appreciate detailed pacing and character nuance.`)}
+      </div>
+    `;
+  }
+
+  const btnNameA = document.getElementById('btn-name-a');
+  const btnNameB = document.getElementById('btn-name-b');
+  if (btnNameA) btnNameA.textContent = itemA.title;
+  if (btnNameB) btnNameB.textContent = itemB.title;
+}
+
+function swapCompareSides() {
+  if (!compareState.currentComparison) return;
+  const { itemA, itemB, verdict } = compareState.currentComparison;
+
+  const newVerdict = {
+    ...verdict,
+    categories: {
+      story: flipCategoryWinner(verdict.categories.story),
+      acting: flipCategoryWinner(verdict.categories.acting),
+      pacing: flipCategoryWinner(verdict.categories.pacing),
+      rewatch_value: flipCategoryWinner(verdict.categories.rewatch_value),
+      cultural_impact: flipCategoryWinner(verdict.categories.cultural_impact),
+    },
+    watch_a_if: verdict.watch_b_if,
+    watch_b_if: verdict.watch_a_if,
+  };
+
+  compareState.currentComparison = {
+    itemA: itemB,
+    itemB: itemA,
+    verdict: newVerdict,
+  };
+
+  renderComparisonView(compareState.currentComparison);
+}
+
+function flipCategoryWinner(catObj) {
+  if (!catObj) return { winner: 'Tie', reason: '' };
+  let win = catObj.winner;
+  if (win === 'A') win = 'B';
+  else if (win === 'B') win = 'A';
+  return { ...catObj, winner: win };
+}
+
+function toggleDebateSection() {
+  const debateContainer = dom.debateContainer;
+  if (!debateContainer) return;
+
+  const isHidden = debateContainer.classList.contains('hidden');
+  debateContainer.classList.toggle('hidden', !isHidden);
+  if (isHidden) {
+    debateContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+async function startDebateWithChoice(side) {
+  if (!compareState.currentComparison) return;
+  const { itemA, itemB } = compareState.currentComparison;
+
+  compareState.debate.active = true;
+  compareState.debate.userChoice = side;
+  compareState.debate.history = [];
+
+  const sidePrompt = document.getElementById('debate-side-prompt');
+  const replyForm = dom.debateReplyForm;
+  const thread = dom.debateThread;
+
+  if (sidePrompt) sidePrompt.classList.add('hidden');
+  if (replyForm) replyForm.classList.remove('hidden');
+  if (thread) thread.innerHTML = '';
+
+  const chosenTitle = side === 'A' ? itemA.title : itemB.title;
+  const userText = `I definitely think ${chosenTitle} is better!`;
+  appendDebateTurn('user', userText);
+
+  await fetchDebateCounterTurn(userText);
+}
+
+async function handleDebateReply(e) {
+  if (e) e.preventDefault();
+  const input = dom.debateReplyInput;
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  appendDebateTurn('user', text);
+  await fetchDebateCounterTurn(text);
+}
+
+async function fetchDebateCounterTurn(userMsg) {
+  if (!compareState.currentComparison) return;
+  const { itemA, itemB } = compareState.currentComparison;
+
+  try {
+    const res = await fetch('/api/debate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        titleA: itemA.title,
+        titleB: itemB.title,
+        userChoice: compareState.debate.userChoice,
+        userMessage: userMsg,
+        history: compareState.debate.history,
+        isEnding: false,
+        shields: ShieldsStore.getAll(),
+      }),
+    });
+
+    const data = await res.json();
+    appendDebateTurn('bot', data.message, data.points || []);
+  } catch (err) {
+    console.error('Debate error:', err);
+    appendDebateTurn('bot', 'A spirited argument! Both titles push cinematic storytelling to highest peaks.', []);
+  }
+}
+
+function appendDebateTurn(role, text, points = []) {
+  const thread = dom.debateThread;
+  if (!thread) return;
+
+  const turnEl = document.createElement('div');
+  turnEl.className = `debate-turn ${role}`;
+
+  const authorName = role === 'user' ? 'You' : 'Kinora';
+  let pointsHtml = '';
+  if (Array.isArray(points) && points.length > 0) {
+    pointsHtml = `
+      <ul class="debate-points-list">
+        ${points.map((p) => `<li>${escapeHtml(p)}</li>`).join('')}
+      </ul>
+    `;
+  }
+
+  turnEl.innerHTML = `
+    <span class="debate-turn-author">${authorName}</span>
+    <div>${escapeHtml(text)}</div>
+    ${pointsHtml}
+  `;
+
+  thread.appendChild(turnEl);
+  thread.scrollTop = thread.scrollHeight;
+
+  compareState.debate.history.push({ role, text, points });
+}
+
+async function endDebateSession() {
+  if (!compareState.currentComparison) return;
+  const { itemA, itemB } = compareState.currentComparison;
+
+  const replyForm = dom.debateReplyForm;
+  if (replyForm) replyForm.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/debate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        titleA: itemA.title,
+        titleB: itemB.title,
+        userChoice: compareState.debate.userChoice,
+        history: compareState.debate.history,
+        isEnding: true,
+        shields: ShieldsStore.getAll(),
+      }),
+    });
+    const data = await res.json();
+    appendDebateTurn('bot', data.message || `Touché! Both ${itemA.title} and ${itemB.title} are true masterpieces. Let's call it a draw!`, []);
+  } catch {
+    appendDebateTurn('bot', `Touché! Both ${itemA.title} and ${itemB.title} are masterpieces. Let's call it a cinephile draw!`, []);
+  }
+}
+
+// -------------------------------------------------------------
+// Natural Language "vs" Parser for Chat Input
+// -------------------------------------------------------------
+function detectComparisonQuery(text) {
+  if (!text) return null;
+  const str = text.trim();
+
+  const vsRegex = /^(.+?)\s+(?:vs\.?|versus|compared to)\s+(.+)$/i;
+  const m1 = str.match(vsRegex);
+  if (m1) {
+    const tA = m1[1].replace(/^(?:compare|can you compare|what is better|which is better|debate)\s+/i, '').trim();
+    const tB = m1[2].replace(/\?.*$/, '').trim();
+    if (tA && tB && tA.length > 1 && tB.length > 1) {
+      return { titleA: tA, titleB: tB };
+    }
+  }
+
+  const compRegex = /^(?:compare|debate)\s+(.+?)\s+(?:and|with|to)\s+(.+)$/i;
+  const m2 = str.match(compRegex);
+  if (m2) {
+    const tA = m2[1].trim();
+    const tB = m2[2].replace(/\?.*$/, '').trim();
+    if (tA && tB && tA.length > 1 && tB.length > 1) {
+      return { titleA: tA, titleB: tB };
+    }
+  }
+
+  return null;
+}
+
+async function loadComparisonByTitles(titleA, titleB) {
+  setMode('compare');
+  const entrySec = dom.compareEntrySection;
+  const loadingSec = dom.compareLoadingState;
+  const resultsSec = dom.compareResultsSection;
+
+  if (entrySec) entrySec.classList.add('hidden');
+  if (resultsSec) resultsSec.classList.add('hidden');
+  if (loadingSec) loadingSec.classList.remove('hidden');
+
+  try {
+    const res = await fetch('/api/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        titleA,
+        titleB,
+        shields: ShieldsStore.getAll(),
+      }),
+    });
+    const data = await res.json();
+    if (loadingSec) loadingSec.classList.add('hidden');
+
+    if (data.error) {
+      alert(data.error);
+      if (entrySec) entrySec.classList.remove('hidden');
+      return;
+    }
+
+    compareState.currentComparison = data;
+    renderComparisonView(data);
+    if (resultsSec) resultsSec.classList.remove('hidden');
+  } catch (err) {
+    if (loadingSec) loadingSec.classList.add('hidden');
+    console.error('Comparison error:', err);
+    if (entrySec) entrySec.classList.remove('hidden');
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
+

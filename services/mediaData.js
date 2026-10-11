@@ -6,6 +6,7 @@
 
 const https = require('https');
 const dns = require('dns');
+const { GoogleGenAI } = require('@google/genai');
 
 // -------------------------------------------------------------
 // 1. Resilient DNS & HTTPS Agent for TMDB
@@ -289,9 +290,13 @@ async function get_details(args = {}) {
   // IMDb ID & OMDb Rating
   const imdbId = raw.external_ids?.imdb_id || raw.imdb_id;
   let imdbRating = null;
+  let imdbVotes = null;
   if (imdbId) {
     const omdbData = await get_imdb_rating({ imdb_id: imdbId });
-    if (omdbData && omdbData.rating) imdbRating = omdbData.rating;
+    if (omdbData && omdbData.rating) {
+      imdbRating = omdbData.rating;
+      imdbVotes = omdbData.votes || null;
+    }
   }
 
   // Watch providers in India (IN)
@@ -299,6 +304,10 @@ async function get_details(args = {}) {
   const watchInIndia = inProviders
     ? {
         flatrate: (inProviders.flatrate || []).map((p) => p.provider_name),
+        flatrate_details: (inProviders.flatrate || []).map((p) => ({
+          name: p.provider_name,
+          logo: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null,
+        })),
         rent: (inProviders.rent || []).map((p) => p.provider_name),
         buy: (inProviders.buy || []).map((p) => p.provider_name),
       }
@@ -330,6 +339,7 @@ async function get_details(args = {}) {
     tmdb_rating: raw.vote_average ? Number(raw.vote_average.toFixed(1)) : null,
     imdb_id: imdbId,
     imdb_rating: imdbRating,
+    imdb_votes: imdbVotes,
     trailer_url: trailerUrl,
     poster_url: raw.poster_path ? `https://image.tmdb.org/t/p/w500${raw.poster_path}` : null,
     backdrop_url: raw.backdrop_path ? `https://image.tmdb.org/t/p/w1280${raw.backdrop_path}` : null,
@@ -799,6 +809,488 @@ async function executeTool(name, args, shieldsInput = null) {
   }
 }
 
+// -------------------------------------------------------------
+// 7. Phase 4: Mood Picks Implementation
+// -------------------------------------------------------------
+const MOOD_CONFIG = {
+  Cozy: {
+    movieGenres: '35,10751,10749',
+    tvGenres: '35,10751',
+    keywords: 'heartwarming, feel-good, comfort',
+  },
+  Hyped: {
+    movieGenres: '28,12,53',
+    tvGenres: '10759',
+    keywords: 'adrenaline, fast-paced, high-stakes',
+  },
+  Heartbroken: {
+    movieGenres: '18,10749',
+    tvGenres: '18',
+    keywords: 'emotional, bittersweet, poignant',
+  },
+  'Mind-bending': {
+    movieGenres: '878,9648,53',
+    tvGenres: '10765,9648',
+    keywords: 'psychological, plot twist, thought-provoking',
+  },
+  Scared: {
+    movieGenres: '27,53,9648',
+    tvGenres: '9648',
+    keywords: 'haunting, spine-chilling, suspense',
+  },
+  Nostalgic: {
+    movieGenres: '12,35,10751,878,18',
+    tvGenres: '10759,35',
+    maxYear: '2005-12-31',
+    keywords: 'timeless, classic, golden era',
+  },
+  'Laugh-out-loud': {
+    movieGenres: '35',
+    tvGenres: '35',
+    keywords: 'hilarious, witty, comedy',
+  },
+  Inspired: {
+    movieGenres: '18,36,99',
+    tvGenres: '18,99',
+    keywords: 'triumph, perseverance, uplifting',
+  },
+};
+
+const PLATFORM_ID_MAP = {
+  Netflix: 8,
+  'Prime Video': 119,
+  'Amazon Prime Video': 119,
+  Hotstar: 122,
+  'Disney+ Hotstar': 122,
+  JioCinema: 220,
+  Zee5: 232,
+  SonyLIV: 237,
+  'Apple TV+': 350,
+};
+
+async function getMoodPicks(options = {}) {
+  const {
+    mood = 'Cozy',
+    mediaType = 'any',
+    timeLimit = 'any',
+    language = 'Any',
+    platforms = [],
+    customMood = '',
+    excludeIds = [],
+    shields = [],
+    count = 3,
+  } = options;
+
+  const targetMood = MOOD_CONFIG[mood] ? mood : 'Cozy';
+  const cfg = MOOD_CONFIG[targetMood];
+
+  const providerIds = (Array.isArray(platforms) ? platforms : [])
+    .map((p) => PLATFORM_ID_MAP[p])
+    .filter(Boolean);
+
+  async function fetchCandidatesForType(type) {
+    const params = {
+      watch_region: 'IN',
+      'vote_average.gte': 6.5,
+      'vote_count.gte': (language && language !== 'Any' && language !== 'English') ? 25 : 60,
+      sort_by: 'popularity.desc',
+    };
+
+    if (type === 'movie') {
+      if (cfg.movieGenres) params.with_genres = cfg.movieGenres;
+      if (cfg.maxYear) params['primary_release_date.lte'] = cfg.maxYear;
+      if (timeLimit === 'under 90 min') params['with_runtime.lte'] = 90;
+      else if (timeLimit === 'under 2 hrs') params['with_runtime.lte'] = 120;
+    } else {
+      if (cfg.tvGenres) params.with_genres = cfg.tvGenres;
+      if (cfg.maxYear) params['first_air_date.lte'] = cfg.maxYear;
+    }
+
+    if (mediaType === 'anime') {
+      params.with_genres = '16';
+      params.with_original_language = 'ja';
+    } else if (language && language !== 'Any') {
+      const langMap = {
+        Hindi: 'hi',
+        English: 'en',
+        Korean: 'ko',
+        Tamil: 'ta',
+        Telugu: 'te',
+      };
+      if (langMap[language]) {
+        params.with_original_language = langMap[language];
+      }
+    }
+
+    if (providerIds.length > 0) {
+      params.with_watch_providers = providerIds.join('|');
+    }
+
+    const data = await tmdbFetch(`/discover/${type}`, params);
+    let list = data && Array.isArray(data.results) ? data.results : [];
+
+    // Fallback relaxation if no titles returned with strict providers:
+    if (list.length === 0 && providerIds.length > 0) {
+      delete params.with_watch_providers;
+      const looseData = await tmdbFetch(`/discover/${type}`, params);
+      list = looseData && Array.isArray(looseData.results) ? looseData.results : [];
+    }
+
+    return list.map((item) => ({ ...item, media_type: type }));
+  }
+
+  let rawCandidates = [];
+  if (mediaType === 'movie') {
+    rawCandidates = await fetchCandidatesForType('movie');
+  } else if (mediaType === 'series' || mediaType === 'tv') {
+    rawCandidates = await fetchCandidatesForType('tv');
+  } else {
+    const [movies, tvs] = await Promise.all([
+      fetchCandidatesForType('movie'),
+      fetchCandidatesForType('tv'),
+    ]);
+    rawCandidates = [...movies, ...tvs].sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+  }
+
+  const excludeSet = new Set((excludeIds || []).map((id) => String(id)));
+  const filteredCandidates = rawCandidates.filter(
+    (c) => c && c.id && !excludeSet.has(String(c.id)) && c.poster_path
+  );
+
+  if (filteredCandidates.length === 0) {
+    return {
+      intro: "No titles matched that exact filter combination.",
+      picks: [],
+      fallbackMessage: "No titles found matching those exact filters. Try selecting 'Any' for language or runtime to loosen your filters!",
+    };
+  }
+
+  const topCandidates = filteredCandidates.slice(0, 10);
+  const enrichedCandidates = await Promise.all(
+    topCandidates.map(async (c) => {
+      const details = await get_details({ id: c.id, type: c.media_type || 'movie' });
+      return details && !details.error ? details : null;
+    })
+  );
+
+  const validEnriched = enrichedCandidates.filter(Boolean);
+
+  let sortedPicks = validEnriched;
+  if (platforms.length > 0) {
+    const lowerPlatforms = platforms.map((p) => p.toLowerCase());
+    sortedPicks = [...validEnriched].sort((a, b) => {
+      const aFlat = (a.watch_providers_in?.flatrate || []).map((p) => p.toLowerCase());
+      const bFlat = (b.watch_providers_in?.flatrate || []).map((p) => p.toLowerCase());
+      const aHas = aFlat.some((p) => lowerPlatforms.some((lp) => p.includes(lp)));
+      const bHas = bFlat.some((p) => lowerPlatforms.some((lp) => p.includes(lp)));
+      if (aHas && !bHas) return -1;
+      if (!aHas && bHas) return 1;
+      return (b.tmdb_rating || 0) - (a.tmdb_rating || 0);
+    });
+  }
+
+  const finalPicks = sortedPicks.slice(0, count);
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  let introLine = `Here are ${finalPicks.length} handpicked ${targetMood.toLowerCase()} watches for you.`;
+  const blurbsMap = new Map();
+
+  if (apiKey && !apiKey.includes('your_gemini_api_key')) {
+    const titlesListStr = finalPicks
+      .map((p, i) => `${i + 1}. ID: ${p.id} | Title: "${p.title}" (${p.year}, ${p.type}) | Overview: ${p.overview?.slice(0, 140)}`)
+      .join('\n');
+
+    const prompt = `You are Kinora, a witty movie and series buddy.
+The user is in Mood Picks mode asking for mood: "${targetMood}" ${customMood ? `("${customMood}")` : ''}.
+Selected Titles:
+${titlesListStr}
+
+Generate a JSON object with:
+1. "intro": Exactly 1 short, engaging sentence introducing these picks (strictly max 1 sentence).
+2. "blurbs": Array of objects for each title above, with:
+   - "id": TMDB ID number
+   - "why": Exactly ONE punchy line explaining why this fits the user's mood (strictly maximum 15 words, NO plot spoilers, NO character twists or endings).
+
+Return ONLY valid JSON matching this schema:
+{
+  "intro": "...",
+  "blurbs": [
+    { "id": 123, "why": "..." }
+  ]
+}`;
+
+    const ai = new GoogleGenAI({ apiKey });
+    const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-3.5-flash'];
+
+    for (const model of modelsToTry) {
+      if (blurbsMap.size > 0) break;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json',
+              temperature: attempt === 0 ? 0.7 : 0.2,
+            },
+          });
+          const parsed = JSON.parse(res.text);
+          if (parsed && typeof parsed.intro === 'string' && Array.isArray(parsed.blurbs)) {
+            introLine = parsed.intro;
+            parsed.blurbs.forEach((b) => {
+              if (b && b.id && b.why) {
+                blurbsMap.set(Number(b.id), String(b.why).trim());
+              }
+            });
+            break;
+          }
+        } catch (err) {
+          console.warn(`Gemini mood picks blurb attempt ${attempt + 1} with ${model} failed:`, err.message);
+        }
+      }
+    }
+  }
+
+  const shieldTitles = (shields || []).map((s) => (s.title || s.showTitle || '').toLowerCase());
+
+  const processedPicks = finalPicks.map((p) => {
+    let whyFits = blurbsMap.get(Number(p.id)) || `${targetMood} storytelling with stellar pacing and memorable moments.`;
+
+    const words = whyFits.split(/\s+/);
+    if (words.length > 15) {
+      whyFits = words.slice(0, 15).join(' ') + '...';
+    }
+
+    const isShielded = shieldTitles.some((st) => st && p.title.toLowerCase().includes(st));
+    if (isShielded) {
+      whyFits = `Guaranteed spoiler-free: a standout match for your ${targetMood.toLowerCase()} vibe.`;
+    }
+
+    return {
+      ...p,
+      why_fits: whyFits,
+    };
+  });
+
+  return {
+    intro: introLine,
+    picks: processedPicks,
+  };
+}
+
+// -------------------------------------------------------------
+// 8. Phase 4: Compare & Debate Implementation
+// -------------------------------------------------------------
+async function getComparisonData(options = {}) {
+  const { titleA, idA, typeA, titleB, idB, typeB, shields = [] } = options;
+
+  let itemA = null;
+  let itemB = null;
+
+  if (idA) {
+    itemA = await get_details({ id: idA, type: typeA || 'movie' });
+  } else if (titleA) {
+    const sA = await search_title({ query: titleA });
+    if (sA.results && sA.results[0]) {
+      const top = sA.results[0];
+      itemA = await get_details({ id: top.id, type: top.media_type || 'movie' });
+    }
+  }
+
+  if (idB) {
+    itemB = await get_details({ id: idB, type: typeB || 'movie' });
+  } else if (titleB) {
+    const sB = await search_title({ query: titleB });
+    if (sB.results && sB.results[0]) {
+      const top = sB.results[0];
+      itemB = await get_details({ id: top.id, type: top.media_type || 'movie' });
+    }
+  }
+
+  if (!itemA || itemA.error || !itemB || itemB.error) {
+    return {
+      error: 'Could not find details for both titles to compare. Please check spelling.',
+    };
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  let verdict = null;
+
+  if (apiKey && !apiKey.includes('your_gemini_api_key')) {
+    const prompt = `You are Kinora, a witty, discerning movie & series expert.
+Provide a side-by-side critical breakdown between:
+Title A: "${itemA.title}" (${itemA.year}, ${itemA.type})
+Overview A: ${itemA.overview?.slice(0, 160)}
+Title B: "${itemB.title}" (${itemB.year}, ${itemB.type})
+Overview B: ${itemB.overview?.slice(0, 160)}
+
+CRITICAL SPOILER RULE:
+Never reveal any plot twists, character deaths, or endings. Keep all commentary spoiler-free.
+
+Evaluate across exactly 5 categories:
+1. Story
+2. Acting
+3. Pacing
+4. Rewatch value
+5. Cultural impact
+
+For each category, designate winner as strictly "A", "B", or "Tie", and write a one-line reason (strictly maximum 12 words).
+Then write an "overall" verdict in exactly 2 sentences.
+Then write "watch_a_if" (one short line: "Watch Title A if...") and "watch_b_if" (one short line: "Watch Title B if...").
+
+Return ONLY valid JSON matching this schema:
+{
+  "categories": {
+    "story": { "winner": "A", "reason": "..." },
+    "acting": { "winner": "B", "reason": "..." },
+    "pacing": { "winner": "Tie", "reason": "..." },
+    "rewatch_value": { "winner": "A", "reason": "..." },
+    "cultural_impact": { "winner": "A", "reason": "..." }
+  },
+  "overall": "Two sentence verdict.",
+  "watch_a_if": "Watch Title A if...",
+  "watch_b_if": "Watch Title B if..."
+}`;
+
+    const ai = new GoogleGenAI({ apiKey });
+    const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-3.5-flash'];
+
+    for (const model of modelsToTry) {
+      if (verdict) break;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json',
+              temperature: attempt === 0 ? 0.6 : 0.2,
+            },
+          });
+          const parsed = JSON.parse(res.text);
+          if (
+            parsed &&
+            parsed.categories &&
+            parsed.categories.story &&
+            typeof parsed.overall === 'string'
+          ) {
+            verdict = parsed;
+            break;
+          }
+        } catch (err) {
+          console.warn(`Comparison verdict attempt ${attempt + 1} with ${model} failed:`, err.message);
+        }
+      }
+    }
+  }
+
+  if (!verdict) {
+    const tmdbA = itemA.tmdb_rating || 0;
+    const tmdbB = itemB.tmdb_rating || 0;
+    verdict = {
+      categories: {
+        story: { winner: tmdbA >= tmdbB ? 'A' : 'B', reason: 'Exceptional narrative craftsmanship and character depth.' },
+        acting: { winner: 'Tie', reason: 'Powerhouse performances across both ensembles.' },
+        pacing: { winner: tmdbA > tmdbB ? 'A' : 'B', reason: 'Consistent momentum with gripping scene progression.' },
+        rewatch_value: { winner: 'Tie', reason: 'Dense details reward multiple viewings.' },
+        cultural_impact: { winner: tmdbA >= tmdbB ? 'A' : 'B', reason: 'Definitive benchmark in contemporary storytelling.' },
+      },
+      overall: `${itemA.title} and ${itemB.title} are landmark achievements in their genres. Whichever you choose delivers top-tier cinema craft.`,
+      watch_a_if: `Watch ${itemA.title} if you want gripping drama with relentless tension.`,
+      watch_b_if: `Watch ${itemB.title} if you prefer rich character nuance and deliberate atmosphere.`,
+    };
+  }
+
+  return { itemA, itemB, verdict };
+}
+
+async function getDebateResponse(options = {}) {
+  const { titleA, titleB, userChoice = 'A', userMessage = '', history = [], isEnding = false, shields = [] } = options;
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey.includes('your_gemini_api_key')) {
+    return {
+      message: isEnding
+        ? `A brilliant cinephile debate! Both ${titleA} and ${titleB} stand as titans of storytelling.`
+        : `A great choice, but let's not overlook what makes the other side unforgettable!`,
+      points: [
+        `Unmatched atmospheric depth and thematic payoff.`,
+        `Extraordinary ensemble chemistry that elevates every scene.`,
+        `Enduring influence on modern cinematic technique.`,
+      ],
+    };
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const defendedSide = userChoice === 'A' ? titleB : titleA;
+  const userSide = userChoice === 'A' ? titleA : titleB;
+
+  if (isEnding) {
+    const endPrompt = `You are Kinora, a witty movie and series buddy.
+The user is concluding a debate between "${titleA}" and "${titleB}".
+Write a short, gracious closing statement (strictly 1 to 2 sentences) acknowledging great points on both sides and giving a witty cinephile signoff. No spoilers.`;
+    try {
+      const res = await ai.models.generateContent({
+        model: 'gemini-3.5-flash-lite',
+        contents: endPrompt,
+      });
+      return { message: (res.text || '').trim(), points: [] };
+    } catch {
+      return {
+        message: `Touché! Both ${titleA} and ${titleB} are masterpieces in their own right. Let's call it a cinephile draw!`,
+        points: [],
+      };
+    }
+  }
+
+  const debatePrompt = `You are Kinora, a witty pop-culture and movie companion.
+Debate matchup: "${titleA}" vs "${titleB}".
+The user is arguing for: "${userSide}".
+User's statement: "${userMessage || `I think ${userSide} is better`}".
+
+YOUR ROLE:
+Champion the OPPOSITE title: "${defendedSide}".
+Defend "${defendedSide}" in a friendly, witty, knowledgeable way.
+STRICT RULES:
+- Provide strictly MAXIMUM 3 short bullet points (each under 20 words).
+- No long speeches, no giant paragraphs.
+- Zero plot spoilers, twists, or ending reveals.
+- Respectful, spirited movie-buddy debate.
+
+Return valid JSON schema:
+{
+  "intro": "One short witty sentence opening your counter-argument.",
+  "points": [
+    "Short point 1",
+    "Short point 2",
+    "Short point 3"
+  ]
+}`;
+
+  try {
+    const res = await ai.models.generateContent({
+      model: 'gemini-3.5-flash-lite',
+      contents: debatePrompt,
+      config: { responseMimeType: 'application/json' },
+    });
+    const parsed = JSON.parse(res.text);
+    return {
+      message: parsed.intro || `I hear you, but here is why ${defendedSide} makes such a compelling case:`,
+      points: Array.isArray(parsed.points) ? parsed.points.slice(0, 3) : [],
+    };
+  } catch (err) {
+    console.warn('Debate response generation failed:', err.message);
+    return {
+      message: `Bold stance! But here is why ${defendedSide} holds such incredible ground:`,
+      points: [
+        `The thematic execution is masterfully layered from start to finish.`,
+        `The character dynamics offer remarkable nuance upon every rewatch.`,
+        `Every visual and narrative beat serves a deliberate, impactful purpose.`,
+      ],
+    };
+  }
+}
+
 module.exports = {
   search_title,
   get_details,
@@ -812,4 +1304,7 @@ module.exports = {
   getSeriesSeasons,
   toolDeclarations,
   executeTool,
+  getMoodPicks,
+  getComparisonData,
+  getDebateResponse,
 };

@@ -89,6 +89,64 @@ app.get('/api/media/seasons', async (req, res) => {
   }
 });
 
+// -------------------------------------------------------------
+// Route: Media Details (for Title Inspector & Cards)
+// -------------------------------------------------------------
+app.get('/api/media/details', async (req, res) => {
+  const id = parseInt(req.query.id, 10);
+  const type = req.query.type || 'movie';
+  if (!id) return res.status(400).json({ error: 'Valid id is required' });
+  try {
+    const data = await media.get_details({ id, type });
+    if (!data || data.error) return res.status(404).json({ error: data?.error || 'Title not found' });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// Route: Mood Picks (Phase 4)
+// -------------------------------------------------------------
+app.post('/api/mood-picks', async (req, res) => {
+  try {
+    const data = await media.getMoodPicks(req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/mood-picks/replace', async (req, res) => {
+  try {
+    const data = await media.getMoodPicks({ ...req.body, count: 1 });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// Route: Compare & Debate (Phase 4)
+// -------------------------------------------------------------
+app.post('/api/compare', async (req, res) => {
+  try {
+    const data = await media.getComparisonData(req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/debate', async (req, res) => {
+  try {
+    const data = await media.getDebateResponse(req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Helper for waiting between retries / stream pacing
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
