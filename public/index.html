@@ -16,6 +16,10 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
 
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="logo.png" />
+  <link rel="apple-touch-icon" href="logo.png" />
+
   <!-- Main Stylesheet -->
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -28,10 +32,7 @@
       <!-- Brand Header -->
       <div class="brand">
         <div class="brand-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="2" width="20" height="20" rx="4" />
-            <path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5" />
-          </svg>
+          <img src="logo.png" alt="Kinora Logo" class="brand-logo-img" />
         </div>
         <div class="brand-text">
           <span class="brand-name">Kin<span class="text-gradient">ora</span></span>
@@ -179,6 +180,9 @@
         <!-- Clean Welcome State (Shown when chat has no messages) -->
         <div class="hero-welcome" id="hero-welcome">
           <div class="hero-brand">
+            <div class="hero-logo-wrap">
+              <img src="logo.png" alt="Kinora" class="hero-logo-img" />
+            </div>
             <h1 class="hero-title">Kin<span class="text-gradient">ora</span></h1>
             <p class="hero-tagline" id="hero-tagline">Every story, zero spoilers.</p>
           </div>
@@ -187,19 +191,31 @@
           <div class="hero-chips-grid" id="hero-chips-grid">
             <button class="hero-chip-btn" data-prompt="Recommend 3 mind-bending sci-fi movies under 2 hours">
               <span class="chip-icon">🌌</span>
-              <span class="chip-text">Mind-Bending Sci-Fi</span>
+              <div class="chip-meta">
+                <span class="chip-text">Mind-Bending Sci-Fi</span>
+                <span class="chip-desc">Under 2 hours • Twist endings</span>
+              </div>
             </button>
             <button class="hero-chip-btn" data-prompt="I am on Season 2 Episode 4 of Dark. Give me a spoiler-safe recap">
               <span class="chip-icon">🛡️</span>
-              <span class="chip-text">Dark S02E04 Safe Recap</span>
+              <div class="chip-meta">
+                <span class="chip-text">Dark S02E04 Safe Recap</span>
+                <span class="chip-desc">Spoiler Shield in action</span>
+              </div>
             </button>
             <button class="hero-chip-btn" data-prompt="Compare Breaking Bad vs Better Call Saul">
               <span class="chip-icon">⚖️</span>
-              <span class="chip-text">Breaking Bad vs BCS</span>
+              <div class="chip-meta">
+                <span class="chip-text">Breaking Bad vs BCS</span>
+                <span class="chip-desc">Side-by-side cinema showdown</span>
+              </div>
             </button>
             <button class="hero-chip-btn" data-prompt="Give me a cozy comfort movie to unwind after a long day">
               <span class="chip-icon">☕</span>
-              <span class="chip-text">Comfort Movie Night</span>
+              <div class="chip-meta">
+                <span class="chip-text">Comfort Movie Night</span>
+                <span class="chip-desc">Cozy, warm & feel-good watches</span>
+              </div>
             </button>
           </div>
         </div>

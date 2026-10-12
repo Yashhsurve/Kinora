@@ -29,7 +29,8 @@ CORE RULES:
 - No long intros, no repeated headings, no horizontal rules.
 - Only write long answers if the user specifically asks for details.
 - Stay strictly on movies, TV series, anime, cinema, and pop culture. For anything else, politely redirect with a witty movie reference.
-- Respect spoiler sensitivity: if a user mentions their watch progress, never reveal or hint at anything beyond that point.`;
+- Respect spoiler sensitivity: if a user mentions their watch progress, never reveal or hint at anything beyond that point.
+- TOOL USAGE: When answering recommendation queries (e.g., "Recommend 3 movies..."), you have deep knowledge of world cinema. If you call search_title or get_details, execute tool calls in at most ONE turn to retrieve live metadata or details for Title Inspector, and always output your complete final text recommendations (with title, year, runtime, and short reason) in the immediate next turn. Never cascade multiple rounds of search calls.`;
 
 // -------------------------------------------------------------
 // Route: Health & Configuration Status
@@ -344,8 +345,8 @@ RULES FOR PROTECTED TITLES:
         let response = await chat.sendMessage({ message });
         let toolTurns = 0;
 
-        // Multi-turn tool execution loop
-        while (response.functionCalls && response.functionCalls.length > 0 && toolTurns < 3) {
+        // Multi-turn tool execution loop (max 2 turns to ensure snappy response)
+        while (response.functionCalls && response.functionCalls.length > 0 && toolTurns < 2) {
           if (isClientDisconnected || res.writableEnded) break;
           toolTurns++;
           usedLiveTool = true;
@@ -411,13 +412,30 @@ RULES FOR PROTECTED TITLES:
 
         generatedText = response.text || '';
 
+        // If the model ended on function calls without outputting text, prompt it for final synthesis!
+        if (!generatedText || !generatedText.trim()) {
+          console.log(`[Tool Call Loop Finished] Model produced no text parts after tools. Synthesizing final response...`);
+          try {
+            const finalTurn = await chat.sendMessage({
+              message: "Based on the tool results above, provide your final response to the user's question now. Include your movie/series recommendations with runtime, year, and a concise reason.",
+            });
+            generatedText = finalTurn.text || '';
+          } catch (synthErr) {
+            console.warn('[Tool Synthesis Error]:', synthErr.message);
+          }
+        }
+
+        if (!generatedText || !generatedText.trim()) {
+          throw new Error(`Model ${modelName} returned empty text after tool processing.`);
+        }
+
         // -------------------------------------------------------------
         // OPTIONAL SAFETY CHECK (Fast Flash-Lite audit across all shields)
         // -------------------------------------------------------------
         const activeOrRelevantShield = allShields.find((s) => {
           const tName = (s.title || s.showTitle || '').toLowerCase();
           return tName && (message.toLowerCase().includes(tName) || generatedText.toLowerCase().includes(tName));
-        }) || allShields[0];
+        });
 
         if (activeOrRelevantShield && generatedText && !isClientDisconnected) {
           try {

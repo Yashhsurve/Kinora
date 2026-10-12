@@ -316,10 +316,10 @@ const MODE_DATA = {
     title: 'Kinora AI',
     tagline: 'Every story, zero spoilers.',
     chips: [
-      { icon: '🌌', text: 'Mind-Bending Sci-Fi', prompt: 'Recommend 3 mind-bending sci-fi movies under 2 hours' },
-      { icon: '🛡️', text: 'Dark S02E04 Safe Recap', prompt: 'I am on Season 2 Episode 4 of Dark. Give me a spoiler-safe recap' },
-      { icon: '⚖️', text: 'Breaking Bad vs BCS', prompt: 'Compare Breaking Bad vs Better Call Saul' },
-      { icon: '☕', text: 'Comfort Movie Night', prompt: 'Give me a cozy comfort movie to unwind after a long day' },
+      { icon: '🌌', text: 'Mind-Bending Sci-Fi', desc: 'Under 2 hours • Twist endings', prompt: 'Recommend 3 mind-bending sci-fi movies under 2 hours' },
+      { icon: '🛡️', text: 'Dark S02E04 Safe Recap', desc: 'Spoiler Shield in action', prompt: 'I am on Season 2 Episode 4 of Dark. Give me a spoiler-safe recap' },
+      { icon: '⚖️', text: 'Breaking Bad vs BCS', desc: 'Side-by-side cinema showdown', prompt: 'Compare Breaking Bad vs Better Call Saul' },
+      { icon: '☕', text: 'Comfort Movie Night', desc: 'Cozy, warm & feel-good watches', prompt: 'Give me a cozy comfort movie to unwind after a long day' },
     ],
   },
   'spoiler-safe': {
@@ -937,7 +937,10 @@ function updateWelcomeViewForMode(modeKey) {
         (chip) => `
         <button class="hero-chip-btn ${state.isGenerating ? 'ui-locked-disabled' : ''}" data-prompt="${escapeHtml(chip.prompt)}">
           <span class="chip-icon">${chip.icon}</span>
-          <span class="chip-text">${escapeHtml(chip.text)}</span>
+          <div class="chip-meta">
+            <span class="chip-text">${escapeHtml(chip.text)}</span>
+            ${chip.desc ? `<span class="chip-desc">${escapeHtml(chip.desc)}</span>` : ''}
+          </div>
         </button>
       `
       )
@@ -1020,7 +1023,7 @@ function appendMessageToDOM(role, content, isStreaming = false, titleData = null
 
   const avatar = document.createElement('div');
   avatar.className = `avatar ${role === 'user' ? 'avatar-user' : 'avatar-bot'}`;
-  avatar.innerHTML = role === 'user' ? '👤' : '🎬';
+  avatar.innerHTML = role === 'user' ? '👤' : '<img src="logo.png" alt="Kinora" class="avatar-logo-img" onerror="this.replaceWith(\'🎬\')" />';
 
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble';
@@ -1441,7 +1444,24 @@ async function handleChatSubmit(e) {
     } else {
       // Completed normally
       if (!accumulatedResponse.trim()) {
-        botRow.remove();
+        const friendlyMsg = 'Kinora is taking a moment to gather those titles. Click below to try again.';
+        bubble.innerHTML = `
+          <p>${escapeHtml(friendlyMsg)}</p>
+          <button class="btn-retry" id="btn-chat-retry">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+            Retry
+          </button>
+        `;
+        const retryBtn = bubble.querySelector('#btn-chat-retry');
+        if (retryBtn) {
+          retryBtn.addEventListener('click', () => {
+            dom.chatInput.value = state.lastUserPrompt;
+            handleChatSubmit();
+          });
+        }
       } else {
         bubble.innerHTML = renderMarkdown(accumulatedResponse);
         addBubbleActions(bubble, accumulatedResponse, currentStreamInspectorData);
