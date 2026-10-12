@@ -291,9 +291,25 @@
                 </div>
               </div>
 
+              <!-- Ranking Style Toggle: Popular / Mix / Hidden gems -->
+              <div class="filter-group">
+                <span class="filter-label">Style:</span>
+                <div class="filter-chips" id="filter-ranking-chips">
+                  <button type="button" class="chip-filter active" data-ranking="popular">Popular</button>
+                  <button type="button" class="chip-filter" data-ranking="mix">Mix</button>
+                  <button type="button" class="chip-filter" data-ranking="hidden-gems">Hidden gems</button>
+                </div>
+              </div>
+
               <!-- "Only on my platforms" Multi-select -->
               <div class="filter-group platforms-group">
-                <span class="filter-label">Only on my platforms:</span>
+                <div class="platform-header-row">
+                  <span class="filter-label">Only on my platforms:</span>
+                  <div class="platform-filter-banner hidden" id="platform-filter-banner">
+                    <span class="platform-banner-text" id="platform-banner-text">Filtered to: </span>
+                    <button type="button" class="btn-clear-platforms" id="btn-clear-platforms" title="Clear platform filter">Clear</button>
+                  </div>
+                </div>
                 <div class="platform-chips" id="filter-platform-chips">
                   <button class="platform-chip" data-platform="Netflix">Netflix</button>
                   <button class="platform-chip" data-platform="Prime Video">Prime Video</button>
@@ -321,39 +337,24 @@
           <!-- 2. Results Section (rendered by frontend) -->
           <div class="mood-results-section hidden" id="mood-results-section">
             <div class="mood-results-header">
-              <p class="mood-bot-intro" id="mood-bot-intro">Here are 3 tailored picks matching your vibe.</p>
+              <p class="mood-bot-intro" id="mood-bot-intro">Here are 6 tailored picks matching your vibe.</p>
               <button class="btn-secondary-sm" id="btn-change-mood-filters">Edit Filters</button>
             </div>
 
-            <!-- Skeletons while fetching -->
+            <!-- Platform filter auto-expansion note -->
+            <div class="mood-platform-note hidden" id="mood-platform-note"></div>
+
+            <!-- Skeletons while fetching (6 skeleton cards in 2-column grid) -->
             <div class="mood-cards-loading hidden" id="mood-cards-loading">
-              <div class="mood-skeleton-card">
-                <div class="sk-poster"></div>
-                <div class="sk-body">
-                  <div class="sk-line title"></div>
-                  <div class="sk-line meta"></div>
-                  <div class="sk-line text"></div>
-                </div>
-              </div>
-              <div class="mood-skeleton-card">
-                <div class="sk-poster"></div>
-                <div class="sk-body">
-                  <div class="sk-line title"></div>
-                  <div class="sk-line meta"></div>
-                  <div class="sk-line text"></div>
-                </div>
-              </div>
-              <div class="mood-skeleton-card">
-                <div class="sk-poster"></div>
-                <div class="sk-body">
-                  <div class="sk-line title"></div>
-                  <div class="sk-line meta"></div>
-                  <div class="sk-line text"></div>
-                </div>
-              </div>
+              <div class="mood-skeleton-card"><div class="sk-poster"></div><div class="sk-body"><div class="sk-line title"></div><div class="sk-line meta"></div><div class="sk-line text"></div></div></div>
+              <div class="mood-skeleton-card"><div class="sk-poster"></div><div class="sk-body"><div class="sk-line title"></div><div class="sk-line meta"></div><div class="sk-line text"></div></div></div>
+              <div class="mood-skeleton-card"><div class="sk-poster"></div><div class="sk-body"><div class="sk-line title"></div><div class="sk-line meta"></div><div class="sk-line text"></div></div></div>
+              <div class="mood-skeleton-card"><div class="sk-poster"></div><div class="sk-body"><div class="sk-line title"></div><div class="sk-line meta"></div><div class="sk-line text"></div></div></div>
+              <div class="mood-skeleton-card"><div class="sk-poster"></div><div class="sk-body"><div class="sk-line title"></div><div class="sk-line meta"></div><div class="sk-line text"></div></div></div>
+              <div class="mood-skeleton-card"><div class="sk-poster"></div><div class="sk-body"><div class="sk-line title"></div><div class="sk-line meta"></div><div class="sk-line text"></div></div></div>
             </div>
 
-            <!-- 3 Picks Cards Container -->
+            <!-- 6 Picks Cards Container (2 columns desktop, 1 on mobile) -->
             <div class="mood-cards-list" id="mood-cards-list"></div>
 
             <!-- Fallback Notice (if filters too tight) -->
@@ -363,9 +364,9 @@
               <button type="button" class="btn-secondary" id="btn-loosen-filters">Loosen Filters</button>
             </div>
 
-            <!-- "Show me 3 more" Action -->
+            <!-- "Show 6 more" Action (Appends next 6 instantly from pool) -->
             <div class="mood-actions-bar" id="mood-actions-bar">
-              <button type="button" class="btn-secondary" id="btn-mood-more">Show me 3 more</button>
+              <button type="button" class="btn-secondary" id="btn-mood-more">Show 6 more</button>
             </div>
           </div>
         </div>

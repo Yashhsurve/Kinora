@@ -475,7 +475,12 @@ const dom = {
   filterMediaChips: document.getElementById('filter-media-chips'),
   filterTimeChips: document.getElementById('filter-time-chips'),
   filterLangChips: document.getElementById('filter-lang-chips'),
+  filterRankingChips: document.getElementById('filter-ranking-chips'),
   filterPlatformChips: document.getElementById('filter-platform-chips'),
+  platformFilterBanner: document.getElementById('platform-filter-banner'),
+  platformBannerText: document.getElementById('platform-banner-text'),
+  btnClearPlatforms: document.getElementById('btn-clear-platforms'),
+  moodPlatformNote: document.getElementById('mood-platform-note'),
   moodCustomInput: document.getElementById('mood-custom-input'),
   btnFindMoodPicks: document.getElementById('btn-find-mood-picks'),
   moodResultsSection: document.getElementById('mood-results-section'),
@@ -2476,8 +2481,13 @@ const moodState = {
   timeLimit: 'any',
   language: 'Any',
   platforms: [],
-  sessionExcludeIds: [],
-  currentPicks: [],
+  rankingStyle: 'popular', // 'popular' | 'mix' | 'hidden-gems'
+  cachedPool: [],
+  displayedPicks: [],
+  displayedCount: 0,
+  dismissedIds: [],
+  prefetching: false,
+  nextPageOffset: 2,
 };
 
 function initMoodPicksState() {
@@ -2485,9 +2495,16 @@ function initMoodPicksState() {
     const saved = localStorage.getItem('kinora_platforms');
     if (saved) {
       moodState.platforms = JSON.parse(saved);
+      if (!Array.isArray(moodState.platforms)) moodState.platforms = [];
+    } else {
+      moodState.platforms = [];
     }
-  } catch {}
+  } catch {
+    moodState.platforms = [];
+  }
   syncPlatformChipsUI();
+  syncPlatformBanner();
+  syncRankingStyleUI();
 }
 
 function syncPlatformChipsUI() {
@@ -2496,6 +2513,87 @@ function syncPlatformChipsUI() {
     const p = c.dataset.platform;
     c.classList.toggle('selected', moodState.platforms.includes(p));
   });
+}
+
+function syncPlatformBanner() {
+  if (!dom.platformFilterBanner) return;
+  if (moodState.platforms.length > 0) {
+    dom.platformFilterBanner.classList.remove('hidden');
+    if (dom.platformBannerText) {
+      dom.platformBannerText.textContent = `Filtered to: ${moodState.platforms.join(', ')}`;
+    }
+  } else {
+    dom.platformFilterBanner.classList.add('hidden');
+  }
+}
+
+function syncRankingStyleUI() {
+  if (!dom.filterRankingChips) return;
+  dom.filterRankingChips.querySelectorAll('.chip-filter').forEach((c) => {
+    c.classList.toggle('active', c.dataset.ranking === moodState.rankingStyle);
+  });
+}
+
+function getOrderedPoolForStyle(pool, style) {
+  if (!Array.isArray(pool)) return [];
+
+  // Filter out dismissed titles or already saved
+  const dismissedSet = new Set(moodState.dismissedIds.map(String));
+  const available = pool.filter((p) => p && p.id && !dismissedSet.has(String(p.id)));
+
+  if (style === 'hidden-gems') {
+    // Hidden gems: prefers vote_count 300-2500 with rating >= 7.5
+    const gems = available.filter(
+      (p) =>
+        p.is_hidden_gem ||
+        (p.vote_count >= 300 && p.vote_count <= 2500 && (p.tmdb_rating >= 7.5 || p.vote_average >= 7.5))
+    );
+    const others = available.filter((p) => !gems.includes(p));
+
+    gems.sort((a, b) => (b.tmdb_rating || b.vote_average || 0) - (a.tmdb_rating || a.vote_average || 0));
+    others.sort((a, b) => (b.score || 0) - (a.score || 0));
+    return [...gems, ...others];
+  }
+
+  if (style === 'mix') {
+    // Mix puts 2 hidden gems among every 6 picks (slots 3 and 6)
+    const gems = available.filter(
+      (p) =>
+        p.is_hidden_gem ||
+        (p.vote_count >= 300 && p.vote_count <= 2500 && (p.tmdb_rating >= 7.5 || p.vote_average >= 7.5))
+    );
+    const popular = available.filter((p) => !gems.includes(p));
+
+    gems.sort((a, b) => (b.tmdb_rating || b.vote_average || 0) - (a.tmdb_rating || a.vote_average || 0));
+    popular.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    const mixed = [];
+    let pIdx = 0;
+    let gIdx = 0;
+
+    while (pIdx < popular.length || gIdx < gems.length) {
+      if (pIdx < popular.length) mixed.push(popular[pIdx++]);
+      if (pIdx < popular.length) mixed.push(popular[pIdx++]);
+      if (gIdx < gems.length) mixed.push(gems[gIdx++]);
+      else if (pIdx < popular.length) mixed.push(popular[pIdx++]);
+
+      if (pIdx < popular.length) mixed.push(popular[pIdx++]);
+      if (pIdx < popular.length) mixed.push(popular[pIdx++]);
+      if (gIdx < gems.length) mixed.push(gems[gIdx++]);
+      else if (pIdx < popular.length) mixed.push(popular[pIdx++]);
+    }
+    return mixed;
+  }
+
+  // Default: Popular (weighted score descending)
+  return [...available].sort((a, b) => (b.score || 0) - (a.score || 0));
+}
+
+function getLabelClass(label) {
+  const clean = String(label || '').toLowerCase();
+  if (clean.includes('critically')) return 'critically-acclaimed';
+  if (clean.includes('gem')) return 'hidden-gem';
+  return 'fan-favourite';
 }
 
 function setupMoodPicksEvents() {
@@ -2551,6 +2649,30 @@ function setupMoodPicksEvents() {
     });
   }
 
+  // Ranking Style Toggle: Popular / Mix / Hidden gems
+  if (dom.filterRankingChips) {
+    dom.filterRankingChips.addEventListener('click', (e) => {
+      if (state.isGenerating) return;
+      const chip = e.target.closest('.chip-filter');
+      if (!chip) return;
+      dom.filterRankingChips.querySelectorAll('.chip-filter').forEach((c) => c.classList.remove('active'));
+      chip.classList.add('active');
+      moodState.rankingStyle = chip.dataset.ranking || 'popular';
+
+      // If pool is already in memory, re-order and re-render instantly!
+      if (moodState.cachedPool.length > 0) {
+        const ordered = getOrderedPoolForStyle(moodState.cachedPool, moodState.rankingStyle);
+        const count = Math.max(6, moodState.displayedCount);
+        moodState.displayedPicks = ordered.slice(0, count);
+        moodState.displayedCount = moodState.displayedPicks.length;
+        renderMoodPicksCards(moodState.displayedPicks, false);
+        fetchBlurbsForVisibleCards(moodState.displayedPicks);
+      } else {
+        fetchMoodPicks(false);
+      }
+    });
+  }
+
   // Filter chips: Platforms multi-select
   if (dom.filterPlatformChips) {
     dom.filterPlatformChips.addEventListener('click', (e) => {
@@ -2567,6 +2689,19 @@ function setupMoodPicksEvents() {
         chip.classList.add('selected');
       }
       localStorage.setItem('kinora_platforms', JSON.stringify(moodState.platforms));
+      syncPlatformBanner();
+      fetchMoodPicks(false);
+    });
+  }
+
+  // Clear platforms button
+  if (dom.btnClearPlatforms) {
+    dom.btnClearPlatforms.addEventListener('click', (e) => {
+      e.stopPropagation();
+      moodState.platforms = [];
+      localStorage.removeItem('kinora_platforms');
+      syncPlatformChipsUI();
+      syncPlatformBanner();
       fetchMoodPicks(false);
     });
   }
@@ -2614,10 +2749,10 @@ function setupMoodPicksEvents() {
     });
   }
 
-  // "Show me 3 more" button
+  // "Show 6 more" button (instant from cached pool)
   if (dom.btnMoodMore) {
     dom.btnMoodMore.addEventListener('click', () => {
-      if (!state.isGenerating) fetchMoodPicks(true);
+      showMoreMoodPicks();
     });
   }
 }
@@ -2630,23 +2765,30 @@ async function fetchMoodPicks(isMore = false) {
   const cardsList = dom.moodCardsList;
   const fallbackBox = dom.moodFallbackBox;
   const introEl = dom.moodBotIntro;
+  const platformNoteEl = dom.moodPlatformNote;
   const customMood = dom.moodCustomInput ? dom.moodCustomInput.value.trim() : '';
 
   if (!isMore) {
-    moodState.sessionExcludeIds = [];
-    moodState.currentPicks = [];
+    moodState.dismissedIds = [];
+    moodState.cachedPool = [];
+    moodState.displayedPicks = [];
+    moodState.displayedCount = 0;
+    moodState.nextPageOffset = 2;
+    if (cardsList) cardsList.innerHTML = '';
   }
 
   if (resultsSec) resultsSec.classList.remove('hidden');
   if (fallbackBox) fallbackBox.classList.add('hidden');
+  if (platformNoteEl) platformNoteEl.classList.add('hidden');
   if (loadingSec) loadingSec.classList.remove('hidden');
-  if (!isMore && cardsList) cardsList.innerHTML = '';
+
+  setControlsLocked(true);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 20000);
 
   try {
-    const res = await fetch('/api/mood-picks', {
+    const res = await fetch('/api/mood-picks/pool', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2656,9 +2798,9 @@ async function fetchMoodPicks(isMore = false) {
         language: moodState.language,
         platforms: moodState.platforms,
         customMood,
-        excludeIds: moodState.sessionExcludeIds,
-        shields: ShieldsStore.getAll(),
-        count: 3,
+        excludeIds: moodState.dismissedIds,
+        savedIds: state.watchlist.map((w) => w.id).filter(Boolean),
+        pageOffset: 1,
       }),
       signal: controller.signal,
     });
@@ -2667,7 +2809,7 @@ async function fetchMoodPicks(isMore = false) {
     const data = await res.json();
     if (loadingSec) loadingSec.classList.add('hidden');
 
-    if (data.fallbackMessage && (!data.picks || data.picks.length === 0)) {
+    if (data.fallbackMessage && (!data.pool || data.pool.length === 0)) {
       if (fallbackBox) {
         fallbackBox.classList.remove('hidden');
         if (dom.moodFallbackMsg) dom.moodFallbackMsg.textContent = data.fallbackMessage;
@@ -2679,17 +2821,35 @@ async function fetchMoodPicks(isMore = false) {
       introEl.textContent = data.intro;
     }
 
-    const picks = Array.isArray(data.picks) ? data.picks : [];
-    picks.forEach((p) => {
-      if (p.id) moodState.sessionExcludeIds.push(p.id);
-    });
+    // Platform auto-expansion note
+    if (platformNoteEl) {
+      if (data.platformNote) {
+        platformNoteEl.textContent = data.platformNote;
+        platformNoteEl.classList.remove('hidden');
+      } else {
+        platformNoteEl.classList.add('hidden');
+      }
+    }
 
-    moodState.currentPicks = picks;
-    renderMoodPicksCards(picks);
+    const pool = Array.isArray(data.pool) ? data.pool : [];
+    moodState.cachedPool = pool;
+
+    // Apply ranking style ordering
+    const ordered = getOrderedPoolForStyle(pool, moodState.rankingStyle);
+
+    // Initial 6 picks rendered immediately
+    const firstSix = ordered.slice(0, 6);
+    moodState.displayedPicks = firstSix;
+    moodState.displayedCount = firstSix.length;
+
+    renderMoodPicksCards(firstSix, false);
 
     if (resultsSec) {
       resultsSec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
+
+    // Background Gemini blurbs fetch for visible cards (never blocks initial render!)
+    fetchBlurbsForVisibleCards(firstSix);
   } catch (err) {
     if (loadingSec) loadingSec.classList.add('hidden');
     console.error('Mood picks error:', err);
@@ -2699,118 +2859,49 @@ async function fetchMoodPicks(isMore = false) {
         dom.moodFallbackMsg.textContent = 'Kinora had trouble fetching picks. Please check your connection and try again.';
       }
     }
+  } finally {
+    setControlsLocked(false);
   }
 }
 
-function renderMoodPicksCards(picks) {
-  const cardsList = dom.moodCardsList;
-  if (!cardsList) return;
+function showMoreMoodPicks() {
+  if (moodState.cachedPool.length === 0) return;
 
-  cardsList.innerHTML = picks
-    .map((p, idx) => {
-      const inWl = isItemInWatchlist(p);
-      const inProviders = p.watch_providers_in?.flatrate_details || [];
-      const providerTags = inProviders.length > 0
-        ? inProviders.slice(0, 3).map((pr) => `
-            <span class="provider-tag">
-              ${pr.logo ? `<img class="provider-logo-img" src="${escapeHtml(pr.logo)}" alt="" />` : ''}
-              ${escapeHtml(pr.name)}
-            </span>
-          `).join('')
-        : `<span style="font-size:11px;color:var(--text-muted)">Streaming info in Details</span>`;
+  const ordered = getOrderedPoolForStyle(moodState.cachedPool, moodState.rankingStyle);
+  const nextBatch = ordered.slice(moodState.displayedCount, moodState.displayedCount + 6);
 
-      return `
-        <div class="mood-pick-card" id="mood-card-${idx}">
-          <div class="pick-poster-wrap">
-            ${p.poster_url ? `<img class="pick-poster" src="${escapeHtml(p.poster_url)}" alt="${escapeHtml(p.title)}" />` : `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:32px;">🎬</div>`}
-          </div>
-          <div class="pick-details">
-            <div>
-              <div class="pick-title-row">
-                <span class="pick-title">${escapeHtml(p.title)}</span>
-                <span class="pick-year">(${escapeHtml(p.year || '')})</span>
-              </div>
-              <div class="pick-meta-row" style="margin-top:4px;">
-                ${p.imdb_rating ? `<span class="badge-rating imdb">⭐ IMDb ${escapeHtml(String(p.imdb_rating))}</span>` : ''}
-                ${p.tmdb_rating ? `<span class="badge-rating tmdb">🎬 TMDB ${escapeHtml(String(p.tmdb_rating))}</span>` : ''}
-                ${p.duration ? `<span class="badge-rating duration">⏱️ ${escapeHtml(p.duration)}</span>` : ''}
-              </div>
-              <div class="pick-blurb">${escapeHtml(p.why_fits)}</div>
-              <div class="pick-providers-row">
-                <span>Watch in India:</span>
-                <div class="provider-logos-list">${providerTags}</div>
-              </div>
-            </div>
-            <div class="pick-actions-row">
-              <button type="button" class="btn-pick-action btn-add-wl ${inWl ? 'saved' : ''}" data-pick-idx="${idx}">
-                ${inWl ? '✓ Saved' : '+ Add to Watchlist'}
-              </button>
-              <button type="button" class="btn-pick-action btn-pick-details" data-pick-idx="${idx}">
-                Details
-              </button>
-              <button type="button" class="btn-pick-action btn-not-for-me" data-pick-idx="${idx}">
-                Not for me
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-    })
-    .join('');
-
-  cardsList.querySelectorAll('.btn-add-wl').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      const idx = parseInt(e.currentTarget.dataset.pickIdx, 10);
-      const pick = moodState.currentPicks[idx];
-      if (pick) {
-        const isSaved = toggleWatchlist(pick);
-        e.currentTarget.classList.toggle('saved', isSaved);
-        e.currentTarget.textContent = isSaved ? '✓ Saved' : '+ Add to Watchlist';
-      }
-    });
-  });
-
-  cardsList.querySelectorAll('.btn-pick-details').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      const idx = parseInt(e.currentTarget.dataset.pickIdx, 10);
-      const pick = moodState.currentPicks[idx];
-      if (pick) {
-        openTitleInspector(pick);
-      }
-    });
-  });
-
-  cardsList.querySelectorAll('.btn-not-for-me').forEach((btn) => {
-    btn.addEventListener('click', async (e) => {
-      const idx = parseInt(e.currentTarget.dataset.pickIdx, 10);
-      const cardEl = document.getElementById(`mood-card-${idx}`);
-      if (cardEl) {
-        cardEl.style.opacity = '0.3';
-      }
-      await replaceSingleMoodPick(idx);
-    });
-  });
-}
-
-function updateMoodCardWatchlistButtons() {
-  const cardsList = dom.moodCardsList;
-  if (!cardsList) return;
-  cardsList.querySelectorAll('.btn-add-wl').forEach((btn) => {
-    const idx = parseInt(btn.dataset.pickIdx, 10);
-    const pick = moodState.currentPicks[idx];
-    if (pick) {
-      const inWl = isItemInWatchlist(pick);
-      btn.classList.toggle('saved', inWl);
-      btn.textContent = inWl ? '✓ Saved' : '+ Add to Watchlist';
+  if (nextBatch.length === 0) {
+    if (dom.btnMoodMore) {
+      dom.btnMoodMore.textContent = 'No more titles found for this vibe';
+      setTimeout(() => {
+        if (dom.btnMoodMore) dom.btnMoodMore.textContent = 'Show 6 more';
+      }, 3000);
     }
-  });
+    return;
+  }
+
+  // Append next 6 instantly without any loading delay!
+  moodState.displayedPicks.push(...nextBatch);
+  moodState.displayedCount = moodState.displayedPicks.length;
+
+  renderMoodPicksCards(nextBatch, true);
+
+  // Background Gemini blurbs for the newly appended 6 cards
+  fetchBlurbsForVisibleCards(nextBatch);
+
+  // Quietly prefetch more items when remaining unshown titles in pool run low (< 8)
+  const remainingInPool = ordered.length - moodState.displayedCount;
+  if (remainingInPool < 8 && !moodState.prefetching) {
+    prefetchMorePool();
+  }
 }
 
-async function replaceSingleMoodPick(replaceIdx) {
+async function prefetchMorePool() {
+  if (moodState.prefetching) return;
+  moodState.prefetching = true;
   try {
     const customMood = dom.moodCustomInput ? dom.moodCustomInput.value.trim() : '';
-
-    const res = await fetch('/api/mood-picks/replace', {
+    const res = await fetch('/api/mood-picks/pool', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2820,24 +2911,234 @@ async function replaceSingleMoodPick(replaceIdx) {
         language: moodState.language,
         platforms: moodState.platforms,
         customMood,
-        excludeIds: moodState.sessionExcludeIds,
-        shields: ShieldsStore.getAll(),
-        count: 1,
+        excludeIds: [
+          ...moodState.dismissedIds,
+          ...moodState.cachedPool.map((p) => p.id),
+        ],
+        savedIds: state.watchlist.map((w) => w.id).filter(Boolean),
+        pageOffset: moodState.nextPageOffset++,
       }),
     });
     const data = await res.json();
-    if (data && Array.isArray(data.picks) && data.picks[0]) {
-      const newPick = data.picks[0];
-      moodState.sessionExcludeIds.push(newPick.id);
-      moodState.currentPicks[replaceIdx] = newPick;
-      renderMoodPicksCards(moodState.currentPicks);
-    } else {
-      moodState.currentPicks.splice(replaceIdx, 1);
-      renderMoodPicksCards(moodState.currentPicks);
+    if (data && Array.isArray(data.pool) && data.pool.length > 0) {
+      const existingIds = new Set(moodState.cachedPool.map((p) => p.id));
+      const freshItems = data.pool.filter((p) => !existingIds.has(p.id));
+      moodState.cachedPool.push(...freshItems);
     }
   } catch (err) {
-    console.warn('Failed to replace mood pick:', err);
+    console.warn('Quiet prefetch error:', err.message);
+  } finally {
+    moodState.prefetching = false;
   }
+}
+
+async function fetchBlurbsForVisibleCards(picks) {
+  if (!Array.isArray(picks) || picks.length === 0) return;
+  try {
+    const customMood = dom.moodCustomInput ? dom.moodCustomInput.value.trim() : '';
+    const res = await fetch('/api/mood-picks/blurbs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        titles: picks.map((p) => ({
+          id: p.id,
+          title: p.title,
+          year: p.year,
+          type: p.media_type || p.type,
+          tagline: p.tagline || '',
+          overview: p.overview || '',
+        })),
+        mood: moodState.selectedMood,
+        customMood,
+        shields: ShieldsStore.getAll(),
+      }),
+    });
+
+    const data = await res.json();
+    if (data && Array.isArray(data.blurbs)) {
+      data.blurbs.forEach((b) => {
+        if (!b || !b.id || !b.why) return;
+        const targetPick = moodState.displayedPicks.find((p) => p.id === b.id);
+        if (targetPick) {
+          targetPick.why_fits = b.why;
+        }
+
+        const blurbEl = document.querySelector(`.pick-blurb[data-pick-id="${b.id}"]`);
+        if (blurbEl) {
+          blurbEl.style.opacity = '0.35';
+          setTimeout(() => {
+            blurbEl.textContent = b.why;
+            blurbEl.style.opacity = '1';
+          }, 140);
+        }
+      });
+
+      if (data.intro && dom.moodBotIntro) {
+        dom.moodBotIntro.textContent = data.intro;
+      }
+    }
+  } catch (err) {
+    console.warn('Background blurbs fetch error:', err.message);
+  }
+}
+
+function createMoodCardHtml(p, idx) {
+  const inWl = isItemInWatchlist(p);
+  const inProviders = p.watch_providers_in?.flatrate_details || [];
+  const providerTags =
+    inProviders.length > 0
+      ? inProviders
+          .slice(0, 3)
+          .map(
+            (pr) => `
+          <span class="provider-tag">
+            ${pr.logo ? `<img class="provider-logo-img" src="${escapeHtml(pr.logo)}" alt="" />` : ''}
+            ${escapeHtml(pr.name)}
+          </span>
+        `
+          )
+          .join('')
+      : `<span style="font-size:11px;color:var(--text-muted)">Streaming info in Details</span>`;
+
+  const labelClass = getLabelClass(p.card_label);
+  const blurbText = p.why_fits || p.initial_blurb || `${p.title} (${p.year})`;
+
+  return `
+    <div class="mood-pick-card" id="mood-card-${p.id}" data-pick-id="${p.id}">
+      <div class="pick-poster-wrap">
+        ${p.poster_url ? `<img class="pick-poster" src="${escapeHtml(p.poster_url)}" alt="${escapeHtml(p.title)}" loading="lazy" />` : `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:32px;">🎬</div>`}
+      </div>
+      <div class="pick-details">
+        <div>
+          <div class="pick-title-row">
+            <span class="pick-title">${escapeHtml(p.title)}</span>
+            <span class="pick-year">(${escapeHtml(p.year || '')})</span>
+            <span class="card-badge-label ${labelClass}">${escapeHtml(p.card_label || 'Fan favourite')}</span>
+          </div>
+          <div class="pick-meta-row" style="margin-top:4px;">
+            ${p.imdb_rating ? `<span class="badge-rating imdb">⭐ IMDb ${escapeHtml(String(p.imdb_rating))}</span>` : ''}
+            ${p.tmdb_rating ? `<span class="badge-rating tmdb">🎬 TMDB ${escapeHtml(String(p.tmdb_rating))}</span>` : ''}
+            ${p.duration ? `<span class="badge-rating duration">⏱️ ${escapeHtml(p.duration)}</span>` : ''}
+          </div>
+          <div class="pick-blurb" data-pick-id="${p.id}">${escapeHtml(blurbText)}</div>
+          <div class="pick-providers-row">
+            <span>Where to watch in India:</span>
+            <div class="provider-logos-list">${providerTags}</div>
+          </div>
+        </div>
+        <div class="pick-actions-row">
+          <button type="button" class="btn-pick-action btn-add-wl ${inWl ? 'saved' : ''}" data-pick-id="${p.id}">
+            ${inWl ? '✓ Saved' : '+ Add to Watchlist'}
+          </button>
+          <button type="button" class="btn-pick-action btn-pick-details" data-pick-id="${p.id}">
+            Details
+          </button>
+          <button type="button" class="btn-pick-action btn-not-for-me" data-pick-id="${p.id}">
+            Not for me
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function bindMoodCardEvents(cardEl, pick) {
+  if (!cardEl || !pick) return;
+
+  const btnWl = cardEl.querySelector('.btn-add-wl');
+  if (btnWl) {
+    btnWl.addEventListener('click', () => {
+      const isSaved = toggleWatchlist(pick);
+      btnWl.classList.toggle('saved', isSaved);
+      btnWl.textContent = isSaved ? '✓ Saved' : '+ Add to Watchlist';
+    });
+  }
+
+  const btnDetails = cardEl.querySelector('.btn-pick-details');
+  if (btnDetails) {
+    btnDetails.addEventListener('click', () => {
+      openTitleInspector(pick);
+    });
+  }
+
+  const btnNot = cardEl.querySelector('.btn-not-for-me');
+  if (btnNot) {
+    btnNot.addEventListener('click', () => {
+      handleNotForMe(pick.id, cardEl);
+    });
+  }
+}
+
+function renderMoodPicksCards(picks, append = false) {
+  const cardsList = dom.moodCardsList;
+  if (!cardsList) return;
+
+  if (!append) {
+    cardsList.innerHTML = picks.map((p, idx) => createMoodCardHtml(p, idx)).join('');
+    picks.forEach((p) => {
+      const cardEl = document.getElementById(`mood-card-${p.id}`);
+      bindMoodCardEvents(cardEl, p);
+    });
+  } else {
+    // Append cards below existing ones without removing anything
+    picks.forEach((p, idx) => {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = createMoodCardHtml(p, idx);
+      const cardEl = tempDiv.firstElementChild;
+      cardsList.appendChild(cardEl);
+      bindMoodCardEvents(cardEl, p);
+    });
+  }
+}
+
+function updateMoodCardWatchlistButtons() {
+  const cardsList = dom.moodCardsList;
+  if (!cardsList) return;
+  cardsList.querySelectorAll('.btn-add-wl').forEach((btn) => {
+    const pickId = parseInt(btn.dataset.pickId, 10);
+    const pick = moodState.displayedPicks.find((p) => p.id === pickId);
+    if (pick) {
+      const inWl = isItemInWatchlist(pick);
+      btn.classList.toggle('saved', inWl);
+      btn.textContent = inWl ? '✓ Saved' : '+ Add to Watchlist';
+    }
+  });
+}
+
+function handleNotForMe(pickId, cardElement) {
+  if (!pickId) return;
+  moodState.dismissedIds.push(pickId);
+
+  // Quick exit animation
+  if (cardElement) {
+    cardElement.classList.add('card-dismiss-anim');
+  }
+
+  setTimeout(() => {
+    // Fill gap instantly from next unshown candidate in pool
+    const ordered = getOrderedPoolForStyle(moodState.cachedPool, moodState.rankingStyle);
+    const displayedIds = new Set(moodState.displayedPicks.map((p) => p.id));
+    const nextPick = ordered.find(
+      (p) => !displayedIds.has(p.id) && !moodState.dismissedIds.includes(p.id)
+    );
+
+    if (nextPick && cardElement && cardElement.parentNode) {
+      const curIdx = moodState.displayedPicks.findIndex((p) => p.id === pickId);
+      if (curIdx >= 0) moodState.displayedPicks[curIdx] = nextPick;
+
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = createMoodCardHtml(nextPick, curIdx);
+      const newCard = tempDiv.firstElementChild;
+      cardElement.replaceWith(newCard);
+      bindMoodCardEvents(newCard, nextPick);
+
+      // Fetch Gemini blurb for replacement card
+      fetchBlurbsForVisibleCards([nextPick]);
+    } else if (cardElement && cardElement.parentNode) {
+      cardElement.remove();
+      moodState.displayedPicks = moodState.displayedPicks.filter((p) => p.id !== pickId);
+    }
+  }, 180);
 }
 
 // ========================================================

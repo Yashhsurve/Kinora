@@ -333,6 +333,7 @@ async function get_details(args = {}) {
     status: raw.status,
     duration: durationInfo,
     genres: (raw.genres || []).map((g) => g.name),
+    tagline: raw.tagline || '',
     overview: raw.overview,
     directors: directors.length > 0 ? directors : creators,
     cast,
@@ -810,7 +811,7 @@ async function executeTool(name, args, shieldsInput = null) {
 }
 
 // -------------------------------------------------------------
-// 7. Phase 4: Mood Picks Implementation
+// 7. Phase 4: High-Quality Mood Picks (Pool, Bayesian Ranking, Blurbs)
 // -------------------------------------------------------------
 const MOOD_CONFIG = {
   Cozy: {
@@ -868,7 +869,51 @@ const PLATFORM_ID_MAP = {
   'Apple TV+': 350,
 };
 
-async function getMoodPicks(options = {}) {
+function getFranchiseKey(title) {
+  if (!title) return '';
+  // Split on colon or hyphen with surrounding spaces (e.g. "Dune: Part Two", "John Wick - Chapter 2")
+  let base = String(title).split(/:\s*|\s+[\–\-]\s+/)[0].trim();
+  // Strip trailing part/chapter indicators like "Part 2", "Chapter 3", "Part II", "Vol. 2", "Episode 4", " 2", " 3"
+  base = base.replace(/\s+(?:part|chapter|vol|volume|episode)\s+([0-9ivx]+)?$/i, '');
+  base = base.replace(/\s+[0-9ivx]+$/i, '');
+  return base.trim().toLowerCase();
+}
+
+function filterSequelsAndDuplicates(items = []) {
+  const seenIds = new Set();
+  const franchiseMap = new Map();
+
+  for (const item of items) {
+    if (!item || !item.id) continue;
+    if (seenIds.has(item.id)) continue;
+    seenIds.add(item.id);
+
+    const fKey = getFranchiseKey(item.title || item.name || '');
+    if (!fKey) {
+      franchiseMap.set(`single_${item.id}`, item);
+      continue;
+    }
+
+    if (!franchiseMap.has(fKey)) {
+      franchiseMap.set(fKey, item);
+    } else {
+      // If we already have an entry for this franchise, prefer the earlier one (first entry)
+      const existing = franchiseMap.get(fKey);
+      const exYear = parseInt((existing.release_date || existing.first_air_date || existing.year || '9999').slice(0, 4), 10);
+      const itemYear = parseInt((item.release_date || item.first_air_date || item.year || '9999').slice(0, 4), 10);
+      if (itemYear < exYear) {
+        franchiseMap.set(fKey, item);
+      }
+    }
+  }
+
+  return Array.from(franchiseMap.values());
+}
+
+/**
+ * Fetch candidate pool of 40+ titles, apply Bayesian ranking, platform filtering, and details
+ */
+async function getMoodPicksPool(options = {}) {
   const {
     mood = 'Cozy',
     mediaType = 'any',
@@ -877,8 +922,8 @@ async function getMoodPicks(options = {}) {
     platforms = [],
     customMood = '',
     excludeIds = [],
-    shields = [],
-    count = 3,
+    savedIds = [],
+    pageOffset = 1,
   } = options;
 
   const targetMood = MOOD_CONFIG[mood] ? mood : 'Cozy';
@@ -888,121 +933,315 @@ async function getMoodPicks(options = {}) {
     .map((p) => PLATFORM_ID_MAP[p])
     .filter(Boolean);
 
-  async function fetchCandidatesForType(type) {
+  const langMap = {
+    Hindi: 'hi',
+    English: 'en',
+    Korean: 'ko',
+    Tamil: 'ta',
+    Telugu: 'te',
+  };
+  const isRegionalLang = language && language !== 'Any' && language !== 'English';
+
+  async function fetchDiscoverPage(type, pageNum) {
     const params = {
-      watch_region: 'IN',
-      'vote_average.gte': 6.5,
-      'vote_count.gte': (language && language !== 'Any' && language !== 'English') ? 25 : 60,
       sort_by: 'popularity.desc',
+      'vote_average.gte': 6.8,
+      'vote_count.gte': isRegionalLang ? 200 : (language === 'English' ? 1200 : 300),
+      page: pageNum,
     };
 
     if (type === 'movie') {
-      if (cfg.movieGenres) params.with_genres = cfg.movieGenres;
+      if (cfg.movieGenres) params.with_genres = cfg.movieGenres.replace(/,/g, '|');
       if (cfg.maxYear) params['primary_release_date.lte'] = cfg.maxYear;
       if (timeLimit === 'under 90 min') params['with_runtime.lte'] = 90;
       else if (timeLimit === 'under 2 hrs') params['with_runtime.lte'] = 120;
     } else {
-      if (cfg.tvGenres) params.with_genres = cfg.tvGenres;
+      if (cfg.tvGenres) params.with_genres = cfg.tvGenres.replace(/,/g, '|');
       if (cfg.maxYear) params['first_air_date.lte'] = cfg.maxYear;
     }
 
     if (mediaType === 'anime') {
       params.with_genres = '16';
       params.with_original_language = 'ja';
-    } else if (language && language !== 'Any') {
-      const langMap = {
-        Hindi: 'hi',
-        English: 'en',
-        Korean: 'ko',
-        Tamil: 'ta',
-        Telugu: 'te',
-      };
-      if (langMap[language]) {
-        params.with_original_language = langMap[language];
-      }
-    }
-
-    if (providerIds.length > 0) {
-      params.with_watch_providers = providerIds.join('|');
+    } else if (language && language !== 'Any' && langMap[language]) {
+      params.with_original_language = langMap[language];
     }
 
     const data = await tmdbFetch(`/discover/${type}`, params);
-    let list = data && Array.isArray(data.results) ? data.results : [];
-
-    // Fallback relaxation if no titles returned with strict providers:
-    if (list.length === 0 && providerIds.length > 0) {
-      delete params.with_watch_providers;
-      const looseData = await tmdbFetch(`/discover/${type}`, params);
-      list = looseData && Array.isArray(looseData.results) ? looseData.results : [];
-    }
-
+    const list = data && Array.isArray(data.results) ? data.results : [];
     return list.map((item) => ({ ...item, media_type: type }));
   }
 
+  // Fetch candidate pages in parallel (target 40-80 raw candidates)
   let rawCandidates = [];
+  const startP = Number(pageOffset) || 1;
+
   if (mediaType === 'movie') {
-    rawCandidates = await fetchCandidatesForType('movie');
-  } else if (mediaType === 'series' || mediaType === 'tv') {
-    rawCandidates = await fetchCandidatesForType('tv');
-  } else {
-    const [movies, tvs] = await Promise.all([
-      fetchCandidatesForType('movie'),
-      fetchCandidatesForType('tv'),
+    const [p1, p2, p3] = await Promise.all([
+      fetchDiscoverPage('movie', startP),
+      fetchDiscoverPage('movie', startP + 1),
+      fetchDiscoverPage('movie', startP + 2),
     ]);
-    rawCandidates = [...movies, ...tvs].sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+    rawCandidates = [...p1, ...p2, ...p3];
+  } else if (mediaType === 'series' || mediaType === 'tv') {
+    const [p1, p2, p3] = await Promise.all([
+      fetchDiscoverPage('tv', startP),
+      fetchDiscoverPage('tv', startP + 1),
+      fetchDiscoverPage('tv', startP + 2),
+    ]);
+    rawCandidates = [...p1, ...p2, ...p3];
+  } else if (mediaType === 'anime') {
+    const [m1, t1, m2] = await Promise.all([
+      fetchDiscoverPage('movie', startP),
+      fetchDiscoverPage('tv', startP),
+      fetchDiscoverPage('movie', startP + 1),
+    ]);
+    rawCandidates = [...m1, ...t1, ...m2];
+  } else {
+    // 'any': 2 pages movies + 2 pages tv in parallel (40 + 40 = 80 raw candidates)
+    const [m1, m2, t1, t2] = await Promise.all([
+      fetchDiscoverPage('movie', startP),
+      fetchDiscoverPage('movie', startP + 1),
+      fetchDiscoverPage('tv', startP),
+      fetchDiscoverPage('tv', startP + 1),
+    ]);
+    rawCandidates = [...m1, ...m2, ...t1, ...t2];
   }
 
-  const excludeSet = new Set((excludeIds || []).map((id) => String(id)));
-  const filteredCandidates = rawCandidates.filter(
-    (c) => c && c.id && !excludeSet.has(String(c.id)) && c.poster_path
-  );
+  // Filter out: no poster, excluded/dismissed IDs, saved IDs
+  const excludeSet = new Set([
+    ...(excludeIds || []).map((id) => String(id)),
+    ...(savedIds || []).map((id) => String(id)),
+  ]);
 
-  if (filteredCandidates.length === 0) {
+  let cleanCandidates = rawCandidates.filter((c) => {
+    if (!c || !c.id || !c.poster_path) return false;
+    if (excludeSet.has(String(c.id))) return false;
+    return true;
+  });
+
+  // Apply Vote Count & Vote Average thresholds:
+  // vote_count >= 1500 for English, >= 300 for regional, vote_average >= 6.8
+  const regionalCodes = ['hi', 'ta', 'te', 'ko', 'ja', 'ml', 'kn', 'bn', 'es', 'fr', 'zh'];
+  let qualified = cleanCandidates.filter((c) => {
+    const origLang = (c.original_language || '').toLowerCase();
+    const isReg = regionalCodes.includes(origLang);
+    const minVotes = isReg || isRegionalLang ? 300 : 1500;
+    const votes = c.vote_count || 0;
+    const rating = c.vote_average || 0;
+    return votes >= minVotes && rating >= 6.8;
+  });
+
+  // Graceful relaxation if strict filters return fewer than 15 candidates:
+  if (qualified.length < 15) {
+    qualified = cleanCandidates.filter((c) => {
+      const origLang = (c.original_language || '').toLowerCase();
+      const isReg = regionalCodes.includes(origLang);
+      const minVotes = isReg || isRegionalLang ? 150 : 800;
+      const votes = c.vote_count || 0;
+      const rating = c.vote_average || 0;
+      return votes >= minVotes && rating >= 6.5;
+    });
+  }
+
+  // Sequel & duplicate deduplication (prefers earlier entry in a franchise)
+  const deduplicated = filterSequelsAndDuplicates(qualified.length > 0 ? qualified : cleanCandidates);
+
+  if (deduplicated.length === 0) {
     return {
       intro: "No titles matched that exact filter combination.",
-      picks: [],
+      pool: [],
+      expandedPlatforms: false,
+      platformNote: null,
       fallbackMessage: "No titles found matching those exact filters. Try selecting 'Any' for language or runtime to loosen your filters!",
     };
   }
 
-  const topCandidates = filteredCandidates.slice(0, 10);
-  const enrichedCandidates = await Promise.all(
-    topCandidates.map(async (c) => {
-      const details = await get_details({ id: c.id, type: c.media_type || 'movie' });
-      return details && !details.error ? details : null;
+  // -----------------------------------------------------------
+  // Bayesian Weighted Rating & Scoring:
+  // score = 0.5 * normalized_popularity + 0.3 * WR + 0.2 * mood_genre_fit
+  // WR = (v / (v + m)) * R + (m / (v + m)) * C
+  // -----------------------------------------------------------
+  const meanRating =
+    deduplicated.reduce((sum, c) => sum + (c.vote_average || 7.0), 0) / deduplicated.length;
+  const maxPop = Math.max(...deduplicated.map((c) => c.popularity || 1), 1);
+
+  const moodGenreList = (
+    (cfg.movieGenres || '') + ',' + (cfg.tvGenres || '')
+  )
+    .split(',')
+    .filter(Boolean)
+    .map(Number);
+
+  const scoredCandidates = deduplicated.map((item) => {
+    const v = item.vote_count || 1;
+    const R = item.vote_average || 7.0;
+    const origLang = (item.original_language || '').toLowerCase();
+    const isReg = regionalCodes.includes(origLang);
+    const m = isReg || isRegionalLang ? 300 : 1500;
+
+    // Bayesian Weighted Rating
+    const WR = (v / (v + m)) * R + (m / (v + m)) * meanRating;
+    const normWR = Math.min(1, Math.max(0, WR / 10));
+
+    // Log-normalized popularity
+    const normPop = Math.min(
+      1,
+      Math.max(0, Math.log10((item.popularity || 1) + 1) / Math.log10(maxPop + 1))
+    );
+
+    // Mood-genre fit (0.5 to 1.0)
+    const matches = (item.genre_ids || []).filter((g) => moodGenreList.includes(g)).length;
+    const genreFit = matches >= 2 ? 1.0 : (matches === 1 ? 0.85 : 0.6);
+
+    const score = 0.5 * normPop + 0.3 * normWR + 0.2 * genreFit;
+
+    // Card Badge Label based on the data:
+    // "Fan favourite", "Critically acclaimed", "Hidden gem"
+    const isHiddenGem = v >= 300 && v <= 2500 && R >= 7.5;
+    let cardLabel = 'Fan favourite';
+
+    if (v >= 4000 || (normPop > 0.75 && v >= 2000)) {
+      cardLabel = 'Fan favourite';
+    } else if (R >= 8.0 || normWR >= 0.8) {
+      cardLabel = 'Critically acclaimed';
+    } else if (isHiddenGem) {
+      cardLabel = 'Hidden gem';
+    } else if (R >= 7.6) {
+      cardLabel = 'Critically acclaimed';
+    } else {
+      cardLabel = 'Fan favourite';
+    }
+
+    return {
+      ...item,
+      score: Number(score.toFixed(4)),
+      bayesian_rating: Number(WR.toFixed(2)),
+      card_label: cardLabel,
+      is_hidden_gem: isHiddenGem,
+    };
+  });
+
+  // Sort candidate pool by weighted score descending
+  scoredCandidates.sort((a, b) => b.score - a.score);
+
+  // Take top 36 candidates to enrich with live providers & details
+  const candidatesToEnrich = scoredCandidates.slice(0, 36);
+
+  const enrichedPool = await Promise.all(
+    candidatesToEnrich.map(async (c) => {
+      try {
+        const details = await get_details({ id: c.id, type: c.media_type || 'movie' });
+        if (!details || details.error) return null;
+
+        const tagline = details.tagline || '';
+        const genres = details.genres || [];
+        const overview = details.overview || c.overview || '';
+
+        // Initial blurb shown immediately before Gemini arrives
+        let initialBlurb = tagline;
+        if (!initialBlurb && genres.length > 0) {
+          initialBlurb = `${genres.slice(0, 3).join(' • ')} • Beloved cinema`;
+        }
+        if (!initialBlurb && overview) {
+          initialBlurb = overview.slice(0, 110) + '...';
+        }
+
+        return {
+          ...details,
+          id: c.id,
+          media_type: c.media_type,
+          popularity: c.popularity,
+          vote_count: c.vote_count,
+          vote_average: c.vote_average,
+          score: c.score,
+          card_label: c.card_label,
+          is_hidden_gem: c.is_hidden_gem,
+          tagline,
+          initial_blurb: initialBlurb || `${targetMood} watch with stellar acclaim.`,
+          why_fits: initialBlurb || `${targetMood} watch with stellar acclaim.`,
+        };
+      } catch (err) {
+        console.warn(`Failed to enrich candidate ${c.id}:`, err.message);
+        return null;
+      }
     })
   );
 
-  const validEnriched = enrichedCandidates.filter(Boolean);
+  const validEnriched = enrichedPool.filter(Boolean);
 
-  let sortedPicks = validEnriched;
-  if (platforms.length > 0) {
+  // -----------------------------------------------------------
+  // Platform Filtering with Auto-Expansion:
+  // If user selected platforms and matches < 6, automatically include other platforms
+  // -----------------------------------------------------------
+  let finalPool = validEnriched;
+  let expandedPlatforms = false;
+  let platformNote = null;
+
+  if (Array.isArray(platforms) && platforms.length > 0) {
     const lowerPlatforms = platforms.map((p) => p.toLowerCase());
-    sortedPicks = [...validEnriched].sort((a, b) => {
-      const aFlat = (a.watch_providers_in?.flatrate || []).map((p) => p.toLowerCase());
-      const bFlat = (b.watch_providers_in?.flatrate || []).map((p) => p.toLowerCase());
-      const aHas = aFlat.some((p) => lowerPlatforms.some((lp) => p.includes(lp)));
-      const bHas = bFlat.some((p) => lowerPlatforms.some((lp) => p.includes(lp)));
-      if (aHas && !bHas) return -1;
-      if (!aHas && bHas) return 1;
-      return (b.tmdb_rating || 0) - (a.tmdb_rating || 0);
-    });
+
+    const isMatch = (item) => {
+      const inFlat = (item.watch_providers_in?.flatrate || []).map((p) => p.toLowerCase());
+      return inFlat.some((pName) => lowerPlatforms.some((lp) => pName.includes(lp)));
+    };
+
+    const platformMatches = validEnriched.filter(isMatch);
+    const nonMatches = validEnriched.filter((item) => !isMatch(item));
+
+    if (platformMatches.length >= 6) {
+      finalPool = platformMatches;
+      expandedPlatforms = false;
+      platformNote = null;
+    } else {
+      // Auto-include other platforms so the user never gets an empty / starved list!
+      finalPool = [...platformMatches, ...nonMatches];
+      expandedPlatforms = true;
+      platformNote = `Showing all platforms because ${platforms.join(', ')} has fewer than 6 picks for this mood.`;
+    }
   }
 
-  const finalPicks = sortedPicks.slice(0, count);
+  const intro = `Here are top-tier ${targetMood.toLowerCase()} watches handpicked for you.`;
+
+  return {
+    intro,
+    pool: finalPool,
+    expandedPlatforms,
+    platformNote,
+    total: finalPool.length,
+  };
+}
+
+/**
+ * Batched Gemini blurbs for visible cards (strictly max 15 words, zero plot spoilers)
+ */
+async function getMoodBlurbs(options = {}) {
+  const {
+    titles = [],
+    mood = 'Cozy',
+    customMood = '',
+    shields = [],
+  } = options;
+
+  if (!Array.isArray(titles) || titles.length === 0) {
+    return { blurbs: [], intro: '' };
+  }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  let introLine = `Here are ${finalPicks.length} handpicked ${targetMood.toLowerCase()} watches for you.`;
   const blurbsMap = new Map();
+  let introLine = `Here are curated ${mood.toLowerCase()} picks tailored to your vibe.`;
 
   if (apiKey && !apiKey.includes('your_gemini_api_key')) {
-    const titlesListStr = finalPicks
-      .map((p, i) => `${i + 1}. ID: ${p.id} | Title: "${p.title}" (${p.year}, ${p.type}) | Overview: ${p.overview?.slice(0, 140)}`)
+    const titlesListStr = titles
+      .map(
+        (p, i) =>
+          `${i + 1}. ID: ${p.id} | Title: "${p.title}" (${p.year || ''}, ${p.type || p.media_type || 'movie'}) | Tagline: "${p.tagline || ''}" | Overview: ${p.overview?.slice(0, 130)}`
+      )
       .join('\n');
 
-    const prompt = `You are Kinora, a witty movie and series buddy.
-The user is in Mood Picks mode asking for mood: "${targetMood}" ${customMood ? `("${customMood}")` : ''}.
-Selected Titles:
+    const prompt = `You are Kinora, a witty cinephile buddy.
+The user is viewing Mood Picks mode for mood: "${mood}" ${customMood ? `("${customMood}")` : ''}.
+Visible Titles:
 ${titlesListStr}
 
 Generate a JSON object with:
@@ -1039,13 +1278,18 @@ Return ONLY valid JSON matching this schema:
             introLine = parsed.intro;
             parsed.blurbs.forEach((b) => {
               if (b && b.id && b.why) {
-                blurbsMap.set(Number(b.id), String(b.why).trim());
+                let whyClean = String(b.why).trim();
+                const words = whyClean.split(/\s+/);
+                if (words.length > 15) {
+                  whyClean = words.slice(0, 15).join(' ') + '...';
+                }
+                blurbsMap.set(Number(b.id), whyClean);
               }
             });
             break;
           }
         } catch (err) {
-          console.warn(`Gemini mood picks blurb attempt ${attempt + 1} with ${model} failed:`, err.message);
+          console.warn(`Gemini mood blurbs attempt ${attempt + 1} with ${model} failed:`, err.message);
         }
       }
     }
@@ -1053,28 +1297,62 @@ Return ONLY valid JSON matching this schema:
 
   const shieldTitles = (shields || []).map((s) => (s.title || s.showTitle || '').toLowerCase());
 
-  const processedPicks = finalPicks.map((p) => {
-    let whyFits = blurbsMap.get(Number(p.id)) || `${targetMood} storytelling with stellar pacing and memorable moments.`;
+  const processedBlurbs = titles.map((p) => {
+    let why = blurbsMap.get(Number(p.id)) || p.initial_blurb || `${mood} cinema with remarkable storytelling and memorable moments.`;
 
-    const words = whyFits.split(/\s+/);
+    const words = why.split(/\s+/);
     if (words.length > 15) {
-      whyFits = words.slice(0, 15).join(' ') + '...';
+      why = words.slice(0, 15).join(' ') + '...';
     }
 
     const isShielded = shieldTitles.some((st) => st && p.title.toLowerCase().includes(st));
     if (isShielded) {
-      whyFits = `Guaranteed spoiler-free: a standout match for your ${targetMood.toLowerCase()} vibe.`;
+      why = `Guaranteed spoiler-free: a standout match for your ${mood.toLowerCase()} vibe.`;
     }
 
     return {
-      ...p,
-      why_fits: whyFits,
+      id: p.id,
+      why,
     };
   });
 
   return {
     intro: introLine,
-    picks: processedPicks,
+    blurbs: processedBlurbs,
+  };
+}
+
+/**
+ * Backwards compatible getMoodPicks wrapper
+ */
+async function getMoodPicks(options = {}) {
+  const poolData = await getMoodPicksPool(options);
+  if (!poolData || !poolData.pool || poolData.pool.length === 0) {
+    return poolData;
+  }
+  const count = options.count || 6;
+  const initialPicks = poolData.pool.slice(0, count);
+
+  const blurbsData = await getMoodBlurbs({
+    titles: initialPicks,
+    mood: options.mood || 'Cozy',
+    customMood: options.customMood || '',
+    shields: options.shields || [],
+  });
+
+  const blurbsMap = new Map((blurbsData.blurbs || []).map((b) => [Number(b.id), b.why]));
+  const picks = initialPicks.map((p) => ({
+    ...p,
+    why_fits: blurbsMap.get(Number(p.id)) || p.why_fits,
+  }));
+
+  return {
+    intro: blurbsData.intro || poolData.intro,
+    picks,
+    pool: poolData.pool,
+    expandedPlatforms: poolData.expandedPlatforms,
+    platformNote: poolData.platformNote,
+    fallbackMessage: poolData.fallbackMessage,
   };
 }
 
@@ -1332,6 +1610,8 @@ module.exports = {
   toolDeclarations,
   executeTool,
   getMoodPicks,
+  getMoodPicksPool,
+  getMoodBlurbs,
   getComparisonMediaData,
   getComparisonVerdict,
   getComparisonData,

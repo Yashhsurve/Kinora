@@ -108,6 +108,24 @@ app.get('/api/media/details', async (req, res) => {
 // -------------------------------------------------------------
 // Route: Mood Picks (Phase 4)
 // -------------------------------------------------------------
+app.post('/api/mood-picks/pool', async (req, res) => {
+  try {
+    const data = await media.getMoodPicksPool(req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/mood-picks/blurbs', async (req, res) => {
+  try {
+    const data = await media.getMoodBlurbs(req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/mood-picks', async (req, res) => {
   try {
     const data = await media.getMoodPicks(req.body);
