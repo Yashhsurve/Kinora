@@ -3,6 +3,18 @@
  * Clean, calm, fast vanilla JavaScript with "One request at a time" discipline.
  */
 
+// Dynamic mobile viewport height calculation (handles address bar expansion and mobile virtual keyboards)
+function updateAppHeight() {
+  const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  document.documentElement.style.setProperty('--app-height', `${vh}px`);
+}
+updateAppHeight();
+window.addEventListener('resize', updateAppHeight);
+window.addEventListener('orientationchange', updateAppHeight);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', updateAppHeight);
+}
+
 // ========================================================
 // 1. STORAGE KEYS & APP STATE
 // ========================================================
@@ -694,6 +706,7 @@ function initRotatingPlaceholder() {
 // 4. INITIALIZATION
 // ========================================================
 function init() {
+  updateAppHeight();
   loadFromStorage();
   applyTheme(state.theme);
   initMoodPicksState();
