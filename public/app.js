@@ -304,6 +304,7 @@ const state = {
   watchlist: [],
   theme: 'dark',
   isListening: false,
+  activeTitleInspectorData: null,
 };
 
 // ========================================================
@@ -436,6 +437,10 @@ const dom = {
   // Inspector Panel (Collapsed by default)
   inspectorPanel: document.getElementById('inspector-panel'),
   btnCloseInspector: document.getElementById('btn-close-inspector'),
+  inspectorOverlay: document.getElementById('inspector-overlay'),
+  inspectorDragHandle: document.getElementById('inspector-drag-handle'),
+  mobileInspectorPill: document.getElementById('mobile-inspector-pill'),
+  mobileInspectorPillText: document.getElementById('mobile-inspector-pill-text'),
 
   // Watchlist Modal
   watchlistModal: document.getElementById('watchlist-modal'),
@@ -796,6 +801,9 @@ function createNewChat() {
 
   state.sessions.unshift(newSession);
   state.currentSessionId = newSession.id;
+  state.activeTitleInspectorData = null;
+  hideMobileInspectorPill();
+  closeInspectorPanel(false);
   saveSessionsToStorage();
   renderHistory();
   renderActiveSession();
@@ -836,8 +844,16 @@ function renderActiveSession() {
       dom.messagesContainer.innerHTML = '';
 
       session.messages.forEach((msg) => {
-        appendMessageToDOM(msg.role, msg.content, false);
+        appendMessageToDOM(msg.role, msg.content, false, msg.titleData);
       });
+
+      const lastBotMsg = [...session.messages].reverse().find((m) => m.role === 'model' && m.titleData);
+      if (lastBotMsg && lastBotMsg.titleData) {
+        state.activeTitleInspectorData = lastBotMsg.titleData;
+        if (window.innerWidth <= 768) {
+          showMobileInspectorPill(lastBotMsg.titleData);
+        }
+      }
 
       scrollToBottom();
     }
@@ -995,7 +1011,7 @@ function deleteSession(id) {
 // ========================================================
 // 7. MESSAGE RENDERING & SPEED STREAMING
 // ========================================================
-function appendMessageToDOM(role, content, isStreaming = false) {
+function appendMessageToDOM(role, content, isStreaming = false, titleData = null) {
   dom.heroWelcome.classList.add('hidden');
   dom.messagesContainer.classList.remove('hidden');
 
@@ -1024,7 +1040,7 @@ function appendMessageToDOM(role, content, isStreaming = false) {
     bubble.innerHTML = renderMarkdown(content);
 
     if (role === 'model' || role === 'bot') {
-      addBubbleActions(bubble, content);
+      addBubbleActions(bubble, content, titleData);
     }
   }
 
@@ -1036,17 +1052,34 @@ function appendMessageToDOM(role, content, isStreaming = false) {
   return { row, bubble };
 }
 
-function addBubbleActions(bubble, content) {
+function addBubbleActions(bubble, content, titleData = null) {
   if (!content) return;
   const actions = document.createElement('div');
   actions.className = 'message-actions';
-  actions.innerHTML = `<button class="btn-bubble-action btn-copy" title="Copy text">Copy</button>`;
-  actions.querySelector('.btn-copy').addEventListener('click', () => {
+
+  const tData = titleData || state.activeTitleInspectorData;
+  if (tData && tData.title) {
+    const inspectBtn = document.createElement('button');
+    inspectBtn.className = 'btn-bubble-action btn-bubble-inspect';
+    inspectBtn.innerHTML = `<span>🎬</span> ${escapeHtml(tData.title)} Details`;
+    inspectBtn.title = 'View details in Title Inspector';
+    inspectBtn.addEventListener('click', () => {
+      openTitleInspector(tData, tData.media_type || tData.type || 'movie', true);
+    });
+    actions.appendChild(inspectBtn);
+  }
+
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'btn-bubble-action btn-copy';
+  copyBtn.title = 'Copy text';
+  copyBtn.textContent = 'Copy';
+  copyBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(content);
-    const btn = actions.querySelector('.btn-copy');
-    btn.textContent = 'Copied!';
-    setTimeout(() => (btn.textContent = 'Copy'), 2000);
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => (copyBtn.textContent = 'Copy'), 2000);
   });
+  actions.appendChild(copyBtn);
+
   bubble.appendChild(actions);
 }
 
@@ -1266,6 +1299,7 @@ async function handleChatSubmit(e) {
   let firstTokenReceived = false;
   let isAborted = false;
   let hadError = false;
+  let currentStreamInspectorData = null;
 
   try {
     const response = await fetch('/api/chat', {
@@ -1307,7 +1341,9 @@ async function handleChatSubmit(e) {
         try {
           const parsed = JSON.parse(dataStr);
           if (parsed.type === 'title_inspector' && parsed.titleData) {
-            openTitleInspector(parsed.titleData);
+            currentStreamInspectorData = parsed.titleData;
+            state.activeTitleInspectorData = parsed.titleData;
+            openTitleInspector(parsed.titleData, parsed.titleData.media_type || parsed.titleData.type || 'movie', false);
           } else if (parsed.text) {
             // First token arrives: remove typing dots and reveal cursor
             if (!firstTokenReceived) {
@@ -1370,8 +1406,8 @@ async function handleChatSubmit(e) {
       } else {
         // Partial text arrived before stop: keep what arrived
         bubble.innerHTML = renderMarkdown(accumulatedResponse);
-        addBubbleActions(bubble, accumulatedResponse);
-        session.messages.push({ role: 'model', content: accumulatedResponse });
+        addBubbleActions(bubble, accumulatedResponse, currentStreamInspectorData);
+        session.messages.push({ role: 'model', content: accumulatedResponse, titleData: currentStreamInspectorData });
         saveSessionsToStorage();
       }
     } else if (hadError) {
@@ -1398,8 +1434,8 @@ async function handleChatSubmit(e) {
       } else {
         // Partial text arrived before error: keep what arrived
         bubble.innerHTML = renderMarkdown(accumulatedResponse);
-        addBubbleActions(bubble, accumulatedResponse);
-        session.messages.push({ role: 'model', content: accumulatedResponse });
+        addBubbleActions(bubble, accumulatedResponse, currentStreamInspectorData);
+        session.messages.push({ role: 'model', content: accumulatedResponse, titleData: currentStreamInspectorData });
         saveSessionsToStorage();
       }
     } else {
@@ -1408,8 +1444,8 @@ async function handleChatSubmit(e) {
         botRow.remove();
       } else {
         bubble.innerHTML = renderMarkdown(accumulatedResponse);
-        addBubbleActions(bubble, accumulatedResponse);
-        session.messages.push({ role: 'model', content: accumulatedResponse });
+        addBubbleActions(bubble, accumulatedResponse, currentStreamInspectorData);
+        session.messages.push({ role: 'model', content: accumulatedResponse, titleData: currentStreamInspectorData });
         saveSessionsToStorage();
       }
     }
@@ -1431,6 +1467,9 @@ function setMode(modeKey, saveSession = true) {
 
   state.currentMode = modeKey;
   localStorage.setItem(STORAGE_KEYS.MODE, modeKey);
+  state.activeTitleInspectorData = null;
+  hideMobileInspectorPill();
+  closeInspectorPanel(false);
 
   // Update active state in sidebar
   document.querySelectorAll('.mode-item').forEach((item) => {
@@ -1607,13 +1646,25 @@ function updateWatchlistBadge() {
 }
 
 // ========================================================
-// 11.1 TITLE INSPECTOR (Opens on Details button)
+// 11.1 TITLE INSPECTOR (Opens on Demand & Draggable on Mobile)
 // ========================================================
-async function openTitleInspector(mediaDataOrId, type = 'movie') {
-  if (!dom.inspectorPanel) return;
+function showMobileInspectorPill(data) {
+  if (!dom.mobileInspectorPill || !data || !data.title) return;
+  if (window.innerWidth > 768) return;
+  if (dom.inspectorPanel && !dom.inspectorPanel.classList.contains('collapsed')) return;
+  if (dom.mobileInspectorPillText) {
+    dom.mobileInspectorPillText.textContent = `${data.title} Details`;
+  }
+  dom.mobileInspectorPill.classList.remove('hidden');
+}
 
-  dom.inspectorPanel.classList.remove('collapsed');
+function hideMobileInspectorPill() {
+  if (dom.mobileInspectorPill) {
+    dom.mobileInspectorPill.classList.add('hidden');
+  }
+}
 
+async function prepareTitleInspectorContent(mediaDataOrId, type = 'movie') {
   const placeholderEl = document.getElementById('inspector-placeholder');
   const skeletonEl = document.getElementById('inspector-skeleton');
   const cardActiveEl = document.getElementById('inspector-card-active');
@@ -1653,8 +1704,10 @@ async function openTitleInspector(mediaDataOrId, type = 'movie') {
 
   if (!data || data.error) {
     if (placeholderEl) placeholderEl.classList.remove('hidden');
-    return;
+    return null;
   }
+
+  state.activeTitleInspectorData = data;
 
   if (cardActiveEl) {
     cardActiveEl.classList.remove('hidden');
@@ -1709,6 +1762,190 @@ async function openTitleInspector(mediaDataOrId, type = 'movie') {
       ` : ''}
     `;
   }
+
+  return data;
+}
+
+async function openTitleInspector(mediaDataOrId, type = 'movie', forceOpen = false) {
+  if (!dom.inspectorPanel) return;
+
+  const isMobile = window.innerWidth <= 768;
+
+  // On mobile: if NOT explicitly requested by user tap (e.g. background stream SSE event),
+  // prepare the data in the background and show the trigger pill, but DO NOT open the panel over the response!
+  if (isMobile && !forceOpen) {
+    const data = await prepareTitleInspectorContent(mediaDataOrId, type);
+    if (data && data.title) {
+      showMobileInspectorPill(data);
+    }
+    return;
+  }
+
+  // Open the panel
+  dom.inspectorPanel.classList.remove('collapsed');
+  dom.inspectorPanel.style.transform = 'translateX(0)';
+
+  if (isMobile && dom.inspectorOverlay) {
+    dom.inspectorOverlay.classList.add('active');
+  }
+
+  hideMobileInspectorPill();
+  await prepareTitleInspectorContent(mediaDataOrId, type);
+}
+
+function closeInspectorPanel(animated = true) {
+  if (!dom.inspectorPanel) return;
+
+  if (animated) {
+    dom.inspectorPanel.style.transition = 'transform 0.26s cubic-bezier(0.16, 1, 0.3, 1)';
+    dom.inspectorPanel.style.transform = 'translateX(100%)';
+    if (dom.inspectorOverlay) {
+      dom.inspectorOverlay.style.transition = 'opacity 0.26s ease';
+      dom.inspectorOverlay.classList.remove('active');
+    }
+    setTimeout(() => {
+      dom.inspectorPanel.classList.add('collapsed');
+      dom.inspectorPanel.style.transform = '';
+      dom.inspectorPanel.style.transition = '';
+      if (dom.inspectorOverlay) {
+        dom.inspectorOverlay.style.opacity = '';
+        dom.inspectorOverlay.style.transition = '';
+      }
+      if (window.innerWidth <= 768 && state.activeTitleInspectorData) {
+        showMobileInspectorPill(state.activeTitleInspectorData);
+      }
+    }, 270);
+  } else {
+    dom.inspectorPanel.classList.add('collapsed');
+    dom.inspectorPanel.style.transform = '';
+    dom.inspectorPanel.style.transition = '';
+    if (dom.inspectorOverlay) {
+      dom.inspectorOverlay.classList.remove('active');
+      dom.inspectorOverlay.style.opacity = '';
+      dom.inspectorOverlay.style.transition = '';
+    }
+    if (window.innerWidth <= 768 && state.activeTitleInspectorData) {
+      showMobileInspectorPill(state.activeTitleInspectorData);
+    }
+  }
+}
+
+function setupInspectorTouchGestures() {
+  if (!dom.inspectorPanel) return;
+
+  let startX = 0;
+  let startY = 0;
+  let currentX = 0;
+  let currentY = 0;
+  let startTime = 0;
+  let isDragging = false;
+  let direction = null;
+
+  dom.inspectorPanel.addEventListener(
+    'touchstart',
+    (e) => {
+      if (dom.inspectorPanel.classList.contains('collapsed')) return;
+      if (e.touches.length !== 1) return;
+
+      const touch = e.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+      currentX = startX;
+      currentY = startY;
+      startTime = Date.now();
+      isDragging = false;
+      direction = null;
+    },
+    { passive: true }
+  );
+
+  dom.inspectorPanel.addEventListener(
+    'touchmove',
+    (e) => {
+      if (dom.inspectorPanel.classList.contains('collapsed')) return;
+      if (e.touches.length !== 1) return;
+
+      const touch = e.touches[0];
+      currentX = touch.clientX;
+      currentY = touch.clientY;
+      const diffX = currentX - startX;
+      const diffY = currentY - startY;
+
+      if (!direction) {
+        const absX = Math.abs(diffX);
+        const absY = Math.abs(diffY);
+        if (absX > 8 || absY > 8) {
+          const startedOnHeader = e.target.closest('.inspector-header') || e.target.closest('.inspector-drag-handle');
+          if (diffX > 6 && absX >= absY) {
+            direction = 'horizontal';
+            isDragging = true;
+          } else if (startedOnHeader && diffY > 6 && absY > absX) {
+            direction = 'vertical';
+            isDragging = true;
+          } else {
+            direction = 'scroll';
+          }
+        }
+      }
+
+      if (isDragging) {
+        if (e.cancelable) e.preventDefault();
+        dom.inspectorPanel.style.transition = 'none';
+
+        if (direction === 'horizontal') {
+          const dragX = Math.max(0, diffX);
+          dom.inspectorPanel.style.transform = `translateX(${dragX}px)`;
+          if (dom.inspectorOverlay) {
+            const ratio = Math.max(0, 1 - dragX / (dom.inspectorPanel.offsetWidth || 320));
+            dom.inspectorOverlay.style.opacity = String(ratio);
+          }
+        } else if (direction === 'vertical') {
+          const dragY = Math.max(0, diffY);
+          dom.inspectorPanel.style.transform = `translateY(${dragY}px)`;
+          if (dom.inspectorOverlay) {
+            const ratio = Math.max(0, 1 - dragY / 300);
+            dom.inspectorOverlay.style.opacity = String(ratio);
+          }
+        }
+      }
+    },
+    { passive: false }
+  );
+
+  const handleTouchEnd = () => {
+    if (!isDragging) return;
+
+    const dt = Math.max(1, Date.now() - startTime);
+    const diffX = currentX - startX;
+    const diffY = currentY - startY;
+    const panelWidth = dom.inspectorPanel.offsetWidth || 320;
+    const velX = diffX / dt;
+    const velY = diffY / dt;
+
+    const shouldCloseHoriz = direction === 'horizontal' && (diffX > panelWidth * 0.28 || (diffX > 35 && velX > 0.35));
+    const shouldCloseVert = direction === 'vertical' && (diffY > 80 || (diffY > 35 && velY > 0.35));
+
+    if (shouldCloseHoriz || shouldCloseVert) {
+      closeInspectorPanel(true);
+    } else {
+      // Snap back smoothly
+      dom.inspectorPanel.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+      dom.inspectorPanel.style.transform = 'translateX(0)';
+      if (dom.inspectorOverlay) {
+        dom.inspectorOverlay.style.transition = 'opacity 0.25s ease';
+        dom.inspectorOverlay.style.opacity = '1';
+      }
+      setTimeout(() => {
+        dom.inspectorPanel.style.transition = '';
+      }, 260);
+    }
+
+    isDragging = false;
+    direction = null;
+  };
+
+  dom.inspectorPanel.addEventListener('touchend', handleTouchEnd, { passive: true });
+  dom.inspectorPanel.addEventListener('touchcancel', handleTouchEnd, { passive: true });
 }
 
 // ========================================================
@@ -2443,10 +2680,6 @@ function closeMobileSidebar() {
   dom.mobileOverlay.classList.remove('active');
 }
 
-function closeInspectorPanel() {
-  dom.inspectorPanel.classList.add('collapsed');
-}
-
 // ========================================================
 // 16. EVENT BINDINGS
 // ========================================================
@@ -2563,8 +2796,19 @@ function bindEvents() {
   dom.btnToggleSidebar.addEventListener('click', toggleMobileSidebar);
   dom.mobileOverlay.addEventListener('click', closeMobileSidebar);
 
-  // Inspector close button
-  dom.btnCloseInspector.addEventListener('click', closeInspectorPanel);
+  // Inspector close button, overlay, mobile trigger pill, and touch gestures
+  dom.btnCloseInspector.addEventListener('click', () => closeInspectorPanel(true));
+  if (dom.inspectorOverlay) {
+    dom.inspectorOverlay.addEventListener('click', () => closeInspectorPanel(true));
+  }
+  if (dom.mobileInspectorPill) {
+    dom.mobileInspectorPill.addEventListener('click', () => {
+      if (state.activeTitleInspectorData) {
+        openTitleInspector(state.activeTitleInspectorData, state.activeTitleInspectorData.media_type || state.activeTitleInspectorData.type || 'movie', true);
+      }
+    });
+  }
+  setupInspectorTouchGestures();
 
   // Theme toggle
   dom.btnToggleTheme.addEventListener('click', toggleTheme);

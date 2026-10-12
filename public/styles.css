@@ -1161,6 +1161,23 @@ button {
 /* ========================================================
    RIGHT INSPECTOR PANEL (Hidden by default, 340px)
    ======================================================== */
+.inspector-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 38;
+  display: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.inspector-overlay.active {
+  display: block;
+  opacity: 1;
+}
+
 .inspector-panel {
   width: var(--inspector-width);
   height: 100%;
@@ -1168,18 +1185,24 @@ button {
   border-left: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
-  z-index: 25;
+  z-index: 40;
   position: absolute;
   right: 0;
   top: 0;
   bottom: 0;
-  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.35);
   transition: transform var(--transition-normal);
+  touch-action: pan-y;
+  user-select: none;
 }
 
 .inspector-panel.collapsed {
   transform: translateX(100%);
   pointer-events: none;
+}
+
+.inspector-drag-handle {
+  display: none;
 }
 
 .inspector-header {
@@ -1189,6 +1212,100 @@ button {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--border-subtle);
+  position: relative;
+  user-select: none;
+}
+
+/* Floating Mobile Inspector Trigger Pill */
+.mobile-inspector-pill {
+  position: fixed;
+  bottom: 84px;
+  right: 14px;
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: var(--radius-full);
+  background: rgba(26, 27, 46, 0.94);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45), 0 0 12px rgba(139, 92, 246, 0.25);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: pillPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="light"] .mobile-inspector-pill {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(139, 92, 246, 0.35);
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.15), 0 0 10px rgba(139, 92, 246, 0.15);
+}
+
+.mobile-inspector-pill:hover,
+.mobile-inspector-pill:active {
+  transform: translateY(-2px) scale(1.02);
+  border-color: var(--accent-primary);
+  box-shadow: 0 6px 22px rgba(139, 92, 246, 0.4);
+}
+
+.mobile-inspector-pill .pill-icon {
+  font-size: 13px;
+}
+
+.mobile-inspector-pill .pill-text {
+  max-width: 130px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-inspector-pill .pill-arrow {
+  font-size: 10px;
+  color: var(--accent-primary);
+}
+
+@keyframes pillPop {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-inspector-pill {
+    display: none !important;
+  }
+}
+
+.btn-bubble-inspect {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(139, 92, 246, 0.14);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  color: var(--accent-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  margin-right: 4px;
+}
+
+.btn-bubble-inspect:hover {
+  background: rgba(139, 92, 246, 0.24);
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
 }
 
 .inspector-title-group {
@@ -1784,6 +1901,26 @@ button {
   .modal-dialog-lg {
     max-width: calc(100vw - 20px) !important;
     margin: 10px auto;
+  }
+
+  .inspector-panel {
+    width: 88vw;
+    max-width: 380px;
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.6);
+  }
+
+  .inspector-drag-handle {
+    display: block;
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 5px;
+    height: 48px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.25);
+    cursor: grab;
+    z-index: 10;
   }
 }
 

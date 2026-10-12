@@ -621,6 +621,7 @@
          Hidden by default; opens only when a title is shown
          ======================================================== -->
     <aside class="inspector-panel collapsed" id="inspector-panel" aria-label="Title Details Panel">
+      <div class="inspector-drag-handle" id="inspector-drag-handle" aria-hidden="true" title="Slide right to close"></div>
       <div class="inspector-header">
         <div class="inspector-title-group">
           <span class="inspector-icon">🔍</span>
@@ -657,6 +658,16 @@
         <div class="inspector-card-active hidden" id="inspector-card-active"></div>
       </div>
     </aside>
+
+    <!-- Mobile Backdrop Overlay for Inspector -->
+    <div class="inspector-overlay" id="inspector-overlay"></div>
+
+    <!-- Floating Mobile Inspector Trigger Pill -->
+    <button type="button" class="mobile-inspector-pill hidden" id="mobile-inspector-pill" aria-label="Open title details">
+      <span class="pill-icon">🎬</span>
+      <span class="pill-text" id="mobile-inspector-pill-text">View Details</span>
+      <span class="pill-arrow">➔</span>
+    </button>
   </div>
 
   <!-- Modal: Watchlist View -->
