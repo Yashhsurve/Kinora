@@ -414,7 +414,9 @@ const dom = {
   // Input
   chatForm: document.getElementById('chat-form'),
   inputWrapper: document.getElementById('input-wrapper'),
+  inputFieldWrap: document.getElementById('input-field-wrap'),
   chatInput: document.getElementById('chat-input'),
+  rotatingPlaceholder: document.getElementById('rotating-placeholder'),
   inputModeTag: document.getElementById('input-mode-tag'),
   btnVoiceInput: document.getElementById('btn-voice-input'),
   btnSend: document.getElementById('btn-send'),
@@ -510,6 +512,185 @@ const dom = {
 };
 
 // ========================================================
+// 3.1 ROTATING PLACEHOLDERS CONTROLLER
+// ========================================================
+const MODE_PLACEHOLDERS = {
+  general: [
+    'Tell me about any movie...',
+    'Ask about a series...',
+    'Who directed Inception?',
+    'Where can I watch Dark?',
+    'Explain a movie ending...',
+    'Best anime to start with?',
+  ],
+  'spoiler-safe': [
+    "I'm on season 1 episode 3...",
+    "Recap what I've watched...",
+    'Who is this character?',
+    'Explain this episode...',
+  ],
+  'mood-picks': [
+    'Something light after a bad day...',
+    'Mind-bending, under 2 hours...',
+    'A cozy comfort watch...',
+  ],
+  quiz: [
+    'Quiz me on Breaking Bad...',
+    'Test me on Marvel...',
+    'Give me a movie riddle...',
+  ],
+  character: [
+    'Talk to Tony Stark...',
+    'Ask Walter White anything...',
+    'Chat with Sherlock...',
+  ],
+  compare: [
+    'Breaking Bad vs Better Call Saul',
+    'Dark vs Stranger Things',
+    'Which is better, X or Y?',
+  ],
+  'for-you': [
+    'What should I watch next?',
+    'Show my taste profile...',
+    'Recommend based on my likes',
+  ],
+};
+
+const STATIC_FOCUSED_PLACEHOLDER = 'Ask anything about movies...';
+
+let placeholderTimer = null;
+let placeholderAnimTimeout = null;
+let currentPlaceholderMode = 'general';
+let placeholderIndex = 0;
+
+function isPlaceholderPaused() {
+  if (!dom.chatInput) return true;
+  if (document.hidden) return true;
+  if (state.isGenerating) return true;
+  if (document.activeElement === dom.chatInput) return true;
+  if (dom.chatInput.value && dom.chatInput.value.length > 0) return true;
+  return false;
+}
+
+function syncPlaceholderInputState() {
+  if (!dom.inputFieldWrap || !dom.chatInput) return;
+  const hasText = dom.chatInput.value.length > 0;
+  dom.inputFieldWrap.classList.toggle('has-text', hasText);
+  const isFocused = document.activeElement === dom.chatInput;
+  dom.inputFieldWrap.classList.toggle('is-focused', isFocused);
+
+  if (isFocused || hasText || state.isGenerating || document.hidden) {
+    stopRotatingPlaceholder();
+  } else {
+    startRotatingPlaceholder();
+  }
+}
+
+function stepRotatingPlaceholder() {
+  if (isPlaceholderPaused()) return;
+  const list = MODE_PLACEHOLDERS[currentPlaceholderMode] || MODE_PLACEHOLDERS.general;
+  if (!list || list.length === 0) return;
+
+  placeholderIndex = (placeholderIndex + 1) % list.length;
+  const nextText = list[placeholderIndex];
+
+  const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (prefersReduced) {
+    if (dom.rotatingPlaceholder) dom.rotatingPlaceholder.textContent = nextText;
+    return;
+  }
+
+  if (!dom.rotatingPlaceholder) return;
+
+  // Slide up and fade out (300ms)
+  dom.rotatingPlaceholder.classList.add('fade-out');
+
+  clearTimeout(placeholderAnimTimeout);
+  placeholderAnimTimeout = setTimeout(() => {
+    if (!dom.rotatingPlaceholder) return;
+    dom.rotatingPlaceholder.textContent = nextText;
+    dom.rotatingPlaceholder.classList.add('slide-prep');
+    dom.rotatingPlaceholder.classList.remove('fade-out');
+
+    // Force reflow
+    void dom.rotatingPlaceholder.offsetHeight;
+
+    // Slide in from slightly below
+    dom.rotatingPlaceholder.classList.remove('slide-prep');
+  }, 300);
+}
+
+function startRotatingPlaceholder() {
+  stopRotatingPlaceholder();
+  if (isPlaceholderPaused()) return;
+
+  const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const intervalMs = prefersReduced ? 4000 : 3000;
+
+  placeholderTimer = setInterval(() => {
+    if (isPlaceholderPaused()) {
+      stopRotatingPlaceholder();
+      return;
+    }
+    stepRotatingPlaceholder();
+  }, intervalMs);
+}
+
+function stopRotatingPlaceholder() {
+  if (placeholderTimer) {
+    clearInterval(placeholderTimer);
+    placeholderTimer = null;
+  }
+}
+
+function updateRotatingPlaceholderMode(modeKey) {
+  currentPlaceholderMode = modeKey || 'general';
+  placeholderIndex = 0;
+  const list = MODE_PLACEHOLDERS[currentPlaceholderMode] || MODE_PLACEHOLDERS.general;
+
+  if (dom.rotatingPlaceholder && list && list.length > 0) {
+    clearTimeout(placeholderAnimTimeout);
+    dom.rotatingPlaceholder.classList.remove('fade-out', 'slide-prep');
+    dom.rotatingPlaceholder.textContent = list[0];
+  }
+
+  syncPlaceholderInputState();
+}
+
+function initRotatingPlaceholder() {
+  if (!dom.chatInput) return;
+
+  // Set fallback accessible placeholder
+  dom.chatInput.setAttribute('placeholder', STATIC_FOCUSED_PLACEHOLDER);
+
+  // Input event listeners
+  dom.chatInput.addEventListener('focus', syncPlaceholderInputState);
+  dom.chatInput.addEventListener('blur', syncPlaceholderInputState);
+  dom.chatInput.addEventListener('input', syncPlaceholderInputState);
+
+  // Tab visibility changes to save battery
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopRotatingPlaceholder();
+    } else {
+      syncPlaceholderInputState();
+    }
+  });
+
+  // Watch for prefers-reduced-motion dynamic changes
+  if (window.matchMedia) {
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (motionQuery.addEventListener) {
+      motionQuery.addEventListener('change', () => {
+        if (!isPlaceholderPaused()) startRotatingPlaceholder();
+      });
+    }
+  }
+
+  updateRotatingPlaceholderMode(state.currentMode || 'general');
+}
+
+// ========================================================
 // 4. INITIALIZATION
 // ========================================================
 function init() {
@@ -523,6 +704,7 @@ function init() {
   renderHistory();
   renderActiveSession();
   bindEvents();
+  initRotatingPlaceholder();
 }
 
 function loadFromStorage() {
@@ -877,6 +1059,7 @@ function setControlsLocked(locked) {
     dom.chatInput.classList.remove('disabled-input');
     if (dom.inputWrapper) dom.inputWrapper.classList.remove('is-generating');
   }
+  syncPlaceholderInputState();
 
   // 2. Send / Stop button state
   const iconSend = dom.btnSend.querySelector('.icon-send');
@@ -957,6 +1140,7 @@ async function handleChatSubmit(e) {
   const vsQuery = detectComparisonQuery(userText);
   if (vsQuery) {
     dom.chatInput.value = '';
+    syncPlaceholderInputState();
     loadComparisonByTitles(vsQuery.titleA, vsQuery.titleB);
     return;
   }
@@ -968,6 +1152,7 @@ async function handleChatSubmit(e) {
   state.lastUserPrompt = userText;
   dom.chatInput.value = '';
   dom.chatInput.style.height = 'auto';
+  syncPlaceholderInputState();
 
   // Session management
   let session = getActiveSession();
@@ -1246,6 +1431,7 @@ function setMode(modeKey, saveSession = true) {
   if (dom.inputModeTag) {
     dom.inputModeTag.textContent = `${data.icon} ${data.title}`;
   }
+  updateRotatingPlaceholderMode(modeKey);
 
   // Handle mode-specific views:
   if (modeKey === 'mood-picks') {

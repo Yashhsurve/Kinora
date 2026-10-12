@@ -421,20 +421,30 @@ button {
 /* Topbar */
 .topbar {
   height: var(--header-height);
-  padding: 0 24px;
+  padding: 0 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-surface);
   z-index: 20;
+  gap: 10px;
 }
 
-.topbar-left,
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .topbar-mode-title {
@@ -443,16 +453,20 @@ button {
   color: var(--text-primary);
   margin-right: 4px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .topbar-shields-bar {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  max-width: calc(100vw - 320px);
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 0;
 }
 
 .topbar-shields-bar::-webkit-scrollbar {
@@ -479,6 +493,7 @@ button {
   transition: all var(--transition-fast);
   white-space: nowrap;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .shield-chip:hover {
@@ -523,6 +538,7 @@ button {
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-add-shield-chip:hover {
@@ -969,9 +985,59 @@ button {
   background: rgba(139, 92, 246, 0.12);
   color: var(--accent-primary);
   white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.input-field-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.rotating-placeholder {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 14.5px;
+  line-height: 1.5;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 1;
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1;
+}
+
+/* Slide-up & fade-out state */
+.rotating-placeholder.fade-out {
+  opacity: 0;
+  transform: translateY(calc(-50% - 6px));
+}
+
+/* Prepared from below for smooth entry */
+.rotating-placeholder.slide-prep {
+  opacity: 0;
+  transform: translateY(calc(-50% + 6px));
+  transition: none !important;
+}
+
+/* When input has text or is focused */
+.input-field-wrap.has-text .rotating-placeholder,
+.input-field-wrap.is-focused .rotating-placeholder {
+  opacity: 0 !important;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .chat-input {
+  width: 100%;
   flex: 1;
   resize: none;
   font-size: 15px;
@@ -979,16 +1045,32 @@ button {
   max-height: 140px;
   min-height: 24px;
   line-height: 1.5;
+  background: transparent;
+  position: relative;
+  z-index: 2;
 }
 
 .chat-input::placeholder {
+  color: transparent;
+  transition: color 0.15s ease;
+}
+
+.input-field-wrap.is-focused .chat-input::placeholder {
   color: var(--text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotating-placeholder {
+    transition: none !important;
+    transform: translateY(-50%) !important;
+  }
 }
 
 .input-actions {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .chat-input:disabled,
@@ -1587,8 +1669,135 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .topbar {
+    padding: 0 10px;
+    height: 52px;
+    gap: 6px;
+  }
+
+  .topbar-left {
+    gap: 6px;
+  }
+
+  .topbar-mode-title {
+    font-size: 13px;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-shields-bar {
+    gap: 4px;
+    padding: 2px 0;
+  }
+
+  .btn-add-shield-chip {
+    padding: 3px 8px;
+    font-size: 10.5px;
+  }
+
+  .shield-chip {
+    padding: 3px 8px;
+    font-size: 10.5px;
+    max-width: 125px;
+  }
+
+  .chip-title {
+    max-width: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-right {
+    gap: 4px;
+  }
+
+  .topbar-right .btn-icon {
+    width: 32px;
+    height: 32px;
+  }
+
   .chat-input-area {
-    padding: 10px 14px 14px;
+    padding: 8px 10px 12px;
+  }
+
+  .input-wrapper {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .input-mode-tag {
+    font-size: 10.5px;
+    padding: 2px 6px;
+    max-width: 85px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .rotating-placeholder {
+    font-size: 13.5px;
+  }
+
+  .chat-input {
+    font-size: 14px;
+  }
+
+  .modal-dialog,
+  .modal-dialog-lg {
+    max-width: calc(100vw - 20px) !important;
+    margin: 10px auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .topbar {
+    padding: 0 8px;
+    gap: 4px;
+  }
+
+  .topbar-mode-title {
+    max-width: 75px;
+    font-size: 12px;
+  }
+
+  .btn-add-shield-chip {
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .shield-chip {
+    padding: 2px 6px;
+    font-size: 10px;
+    max-width: 110px;
+  }
+
+  .chip-title {
+    max-width: 50px;
+  }
+
+  .input-wrapper {
+    padding: 7px 8px;
+    gap: 6px;
+  }
+
+  .input-mode-tag {
+    font-size: 10px;
+    padding: 1px 5px;
+    max-width: 65px;
+  }
+
+  .rotating-placeholder {
+    font-size: 13px;
+  }
+
+  .chat-input {
+    font-size: 13.5px;
+  }
+
+  .input-actions .btn-icon-subtle,
+  .btn-send {
+    width: 30px;
+    height: 30px;
   }
 }
 

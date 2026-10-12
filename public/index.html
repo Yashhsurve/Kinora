@@ -562,13 +562,16 @@
         <form class="input-form" id="chat-form">
           <div class="input-wrapper" id="input-wrapper">
             <span class="input-mode-tag" id="input-mode-tag">⚡ Kinora AI</span>
-            <textarea
-              id="chat-input"
-              class="chat-input"
-              rows="1"
-              placeholder="Ask about any movie, series, anime, or pop culture..."
-              aria-label="Ask Kinora"
-            ></textarea>
+            <div class="input-field-wrap" id="input-field-wrap">
+              <textarea
+                id="chat-input"
+                class="chat-input"
+                rows="1"
+                placeholder="Ask anything about movies..."
+                aria-label="Ask Kinora"
+              ></textarea>
+              <span class="rotating-placeholder" id="rotating-placeholder" aria-hidden="true">Tell me about any movie...</span>
+            </div>
 
             <div class="input-actions">
               <!-- Voice Input -->
