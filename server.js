@@ -127,8 +127,26 @@ app.post('/api/mood-picks/replace', async (req, res) => {
 });
 
 // -------------------------------------------------------------
-// Route: Compare & Debate (Phase 4)
+// Route: Compare & Debate (Phase 4 Two-Stage Loading)
 // -------------------------------------------------------------
+app.post('/api/compare/data', async (req, res) => {
+  try {
+    const data = await media.getComparisonMediaData(req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/compare/verdict', async (req, res) => {
+  try {
+    const data = await media.getComparisonVerdict(req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/compare', async (req, res) => {
   try {
     const data = await media.getComparisonData(req.body);

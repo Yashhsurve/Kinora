@@ -443,16 +443,7 @@
             </div>
           </div>
 
-          <!-- Loading State -->
-          <div class="compare-loading-state hidden" id="compare-loading-state">
-            <div class="compare-skeleton-header">
-              <div class="sk-card"></div>
-              <div class="sk-card"></div>
-            </div>
-            <div class="sk-table"></div>
-          </div>
-
-          <!-- 2. Comparison View (Rendered by Frontend) -->
+          <!-- 2. Comparison View (Rendered by Frontend with Instant Two-Stage Loading) -->
           <div class="compare-results-section hidden" id="compare-results-section">
             <!-- Top Action Bar -->
             <div class="compare-top-nav">
@@ -463,11 +454,16 @@
               </div>
             </div>
 
-            <!-- Side-by-side Posters & Title Header -->
+            <!-- Side-by-side Posters & Title Header (Instant feedback on click with VS badge) -->
             <div class="compare-heroes-container" id="compare-heroes-container"></div>
 
-            <!-- Real Data Table (Subtle highlight on better value) -->
+            <!-- Real Data Table (Skeleton shimmer while loading -> live metrics with subtle highlights) -->
             <div class="compare-table-wrapper" id="compare-table-wrapper">
+              <div class="compare-data-error hidden" id="compare-data-error">
+                <span class="error-icon">⚠️</span>
+                <p class="error-msg">Couldn't load this comparison. Try again</p>
+                <button type="button" class="btn-primary-sm" id="btn-compare-data-retry">Retry</button>
+              </div>
               <table class="compare-table" id="compare-data-table">
                 <thead>
                   <tr>
@@ -480,21 +476,47 @@
               </table>
             </div>
 
-            <!-- Kinora's Take (Structured Verdict Block) -->
+            <!-- Kinora's Take (Structured Verdict Block with Skeleton & Rotating Status) -->
             <div class="verdict-block" id="verdict-block">
               <div class="verdict-header">
                 <div class="verdict-badge">Kinora's take (opinion)</div>
                 <span class="verdict-spoiler-tag">Zero spoilers</span>
               </div>
 
-              <!-- Categories breakdown (Story, Acting, Pacing, Rewatch value, Cultural impact) -->
-              <div class="verdict-categories-grid" id="verdict-categories-grid"></div>
+              <!-- Verdict Loading State (Stage 2 skeleton & rotating status text) -->
+              <div class="verdict-loading-state hidden" id="verdict-loading-state">
+                <div class="verdict-status-row">
+                  <span class="spinner-sm"></span>
+                  <span class="verdict-status-text" id="verdict-status-text">Reading the reviews...</span>
+                </div>
+                <div class="verdict-skeleton-grid">
+                  <div class="sk-verdict-card"><div class="sk-table-line metric"></div><div class="sk-table-line val"></div></div>
+                  <div class="sk-verdict-card"><div class="sk-table-line metric"></div><div class="sk-table-line val"></div></div>
+                  <div class="sk-verdict-card"><div class="sk-table-line metric"></div><div class="sk-table-line val"></div></div>
+                  <div class="sk-verdict-card"><div class="sk-table-line metric"></div><div class="sk-table-line val"></div></div>
+                  <div class="sk-verdict-card"><div class="sk-table-line metric"></div><div class="sk-table-line val"></div></div>
+                </div>
+                <div class="sk-table-line val" style="margin-top:14px;width:90%;"></div>
+                <div class="sk-table-line val" style="width:65%;"></div>
+              </div>
 
-              <!-- Overall 2-sentence verdict -->
-              <div class="verdict-overall" id="verdict-overall"></div>
+              <!-- Verdict Error State -->
+              <div class="verdict-error-state hidden" id="verdict-error-state">
+                <p class="error-msg">Couldn't load Kinora's verdict. Try again</p>
+                <button type="button" class="btn-primary-sm" id="btn-verdict-retry">Retry Verdict</button>
+              </div>
 
-              <!-- Watch A if / Watch B if callouts -->
-              <div class="verdict-watch-if-grid" id="verdict-watch-if-grid"></div>
+              <!-- Real Verdict Content (Fades in when Stage 2 arrives) -->
+              <div class="verdict-content" id="verdict-content">
+                <!-- Categories breakdown (Story, Acting, Pacing, Rewatch value, Cultural impact) -->
+                <div class="verdict-categories-grid" id="verdict-categories-grid"></div>
+
+                <!-- Overall 2-sentence verdict -->
+                <div class="verdict-overall" id="verdict-overall"></div>
+
+                <!-- Watch A if / Watch B if callouts -->
+                <div class="verdict-watch-if-grid" id="verdict-watch-if-grid"></div>
+              </div>
             </div>
 
             <!-- 3. Debate Me Section -->

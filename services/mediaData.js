@@ -1079,38 +1079,58 @@ Return ONLY valid JSON matching this schema:
 }
 
 // -------------------------------------------------------------
-// 8. Phase 4: Compare & Debate Implementation
+// 8. Phase 4: Compare & Debate Implementation (Two-Stage Architecture)
 // -------------------------------------------------------------
-async function getComparisonData(options = {}) {
+async function getComparisonMediaData(options = {}) {
   const { titleA, idA, typeA, titleB, idB, typeB, shields = [] } = options;
 
   let itemA = null;
   let itemB = null;
 
-  if (idA) {
-    itemA = await get_details({ id: idA, type: typeA || 'movie' });
-  } else if (titleA) {
-    const sA = await search_title({ query: titleA });
-    if (sA.results && sA.results[0]) {
-      const top = sA.results[0];
-      itemA = await get_details({ id: top.id, type: top.media_type || 'movie' });
+  // Run searches / detail fetching for Title A and Title B in parallel
+  const fetchItemA = (async () => {
+    if (idA) {
+      return await get_details({ id: idA, type: typeA || 'movie' });
+    } else if (titleA) {
+      const sA = await search_title({ query: titleA });
+      if (sA.results && sA.results[0]) {
+        const top = sA.results[0];
+        return await get_details({ id: top.id, type: top.media_type || 'movie' });
+      }
     }
-  }
+    return null;
+  })();
 
-  if (idB) {
-    itemB = await get_details({ id: idB, type: typeB || 'movie' });
-  } else if (titleB) {
-    const sB = await search_title({ query: titleB });
-    if (sB.results && sB.results[0]) {
-      const top = sB.results[0];
-      itemB = await get_details({ id: top.id, type: top.media_type || 'movie' });
+  const fetchItemB = (async () => {
+    if (idB) {
+      return await get_details({ id: idB, type: typeB || 'movie' });
+    } else if (titleB) {
+      const sB = await search_title({ query: titleB });
+      if (sB.results && sB.results[0]) {
+        const top = sB.results[0];
+        return await get_details({ id: top.id, type: top.media_type || 'movie' });
+      }
     }
-  }
+    return null;
+  })();
+
+  const [resA, resB] = await Promise.all([fetchItemA, fetchItemB]);
+  itemA = resA;
+  itemB = resB;
 
   if (!itemA || itemA.error || !itemB || itemB.error) {
     return {
       error: 'Could not find details for both titles to compare. Please check spelling.',
     };
+  }
+
+  return { itemA, itemB };
+}
+
+async function getComparisonVerdict(options = {}) {
+  const { itemA, itemB, shields = [] } = options;
+  if (!itemA || !itemB) {
+    return { error: 'Both titles are required to generate verdict.' };
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -1201,7 +1221,14 @@ Return ONLY valid JSON matching this schema:
     };
   }
 
-  return { itemA, itemB, verdict };
+  return { verdict };
+}
+
+async function getComparisonData(options = {}) {
+  const mediaRes = await getComparisonMediaData(options);
+  if (mediaRes.error) return mediaRes;
+  const verdictRes = await getComparisonVerdict({ itemA: mediaRes.itemA, itemB: mediaRes.itemB, shields: options.shields });
+  return { itemA: mediaRes.itemA, itemB: mediaRes.itemB, verdict: verdictRes.verdict };
 }
 
 async function getDebateResponse(options = {}) {
@@ -1305,6 +1332,8 @@ module.exports = {
   toolDeclarations,
   executeTool,
   getMoodPicks,
+  getComparisonMediaData,
+  getComparisonVerdict,
   getComparisonData,
   getDebateResponse,
 };

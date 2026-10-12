@@ -1419,13 +1419,28 @@ async function openTitleInspector(mediaDataOrId, type = 'movie') {
   if (skeletonEl) skeletonEl.classList.remove('hidden');
 
   let data = null;
-  if (typeof mediaDataOrId === 'object' && mediaDataOrId !== null && mediaDataOrId.title) {
+  if (
+    typeof mediaDataOrId === 'object' &&
+    mediaDataOrId !== null &&
+    mediaDataOrId.title &&
+    (mediaDataOrId.overview || mediaDataOrId.cast || mediaDataOrId.genres?.length)
+  ) {
     data = mediaDataOrId;
   } else {
+    const idToFetch = typeof mediaDataOrId === 'object' ? (mediaDataOrId.id || mediaDataOrId.tmdbId) : mediaDataOrId;
+    const typeToFetch = typeof mediaDataOrId === 'object' ? (mediaDataOrId.media_type || mediaDataOrId.type || type) : type;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+
     try {
-      const res = await fetch(`/api/media/details?id=${encodeURIComponent(mediaDataOrId)}&type=${encodeURIComponent(type)}`);
+      const res = await fetch(`/api/media/details?id=${encodeURIComponent(idToFetch)}&type=${encodeURIComponent(typeToFetch)}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
       data = await res.json();
     } catch (e) {
+      clearTimeout(timeoutId);
       console.warn('Failed to fetch title inspector details:', e);
     }
   }
@@ -2627,6 +2642,9 @@ async function fetchMoodPicks(isMore = false) {
   if (loadingSec) loadingSec.classList.remove('hidden');
   if (!isMore && cardsList) cardsList.innerHTML = '';
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+
   try {
     const res = await fetch('/api/mood-picks', {
       method: 'POST',
@@ -2642,7 +2660,9 @@ async function fetchMoodPicks(isMore = false) {
         shields: ShieldsStore.getAll(),
         count: 3,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     const data = await res.json();
     if (loadingSec) loadingSec.classList.add('hidden');
@@ -2827,6 +2847,7 @@ const compareState = {
   selectedA: null,
   selectedB: null,
   currentComparison: null,
+  isLoading: false,
   debate: {
     active: false,
     userChoice: null,
@@ -2868,7 +2889,7 @@ function setupComparePickers() {
 
   if (dom.btnLaunchCompare) {
     dom.btnLaunchCompare.addEventListener('click', () => {
-      if (compareState.selectedA && compareState.selectedB) {
+      if (compareState.selectedA && compareState.selectedB && !compareState.isLoading) {
         launchComparison();
       }
     });
@@ -2901,6 +2922,24 @@ function setupComparePickers() {
 
   if (dom.debateReplyForm) {
     dom.debateReplyForm.addEventListener('submit', handleDebateReply);
+  }
+
+  const btnRetryData = document.getElementById('btn-compare-data-retry');
+  if (btnRetryData) {
+    btnRetryData.addEventListener('click', () => {
+      if (!compareState.isLoading) {
+        launchComparison(compareState.selectedA, compareState.selectedB);
+      }
+    });
+  }
+
+  const btnRetryVerdict = document.getElementById('btn-verdict-retry');
+  if (btnRetryVerdict) {
+    btnRetryVerdict.addEventListener('click', () => {
+      if (!compareState.isLoading && compareState.currentComparison?.itemA && compareState.currentComparison?.itemB) {
+        fetchAndRenderVerdict(compareState.currentComparison.itemA, compareState.currentComparison.itemB);
+      }
+    });
   }
 }
 
@@ -2999,11 +3038,49 @@ function resetCompareSide(side) {
 
 function checkLaunchButtonState() {
   if (dom.btnLaunchCompare) {
-    dom.btnLaunchCompare.disabled = !(compareState.selectedA && compareState.selectedB);
+    dom.btnLaunchCompare.disabled = !(compareState.selectedA && compareState.selectedB) || compareState.isLoading;
+  }
+}
+
+function setCompareInputsDisabled(disabled) {
+  const inputA = document.getElementById('compare-search-a');
+  const inputB = document.getElementById('compare-search-b');
+  const btnClearA = document.getElementById('btn-clear-title-a');
+  const btnClearB = document.getElementById('btn-clear-title-b');
+  if (inputA) inputA.disabled = disabled;
+  if (inputB) inputB.disabled = disabled;
+  if (btnClearA) btnClearA.disabled = disabled;
+  if (btnClearB) btnClearB.disabled = disabled;
+}
+
+let verdictStatusInterval = null;
+
+function startRotatingVerdictStatus() {
+  const statusEl = document.getElementById('verdict-status-text');
+  if (!statusEl) return;
+  const phrases = [
+    'Reading the reviews...',
+    'Weighing story and acting...',
+    'Settling the score...',
+  ];
+  let idx = 0;
+  statusEl.textContent = phrases[0];
+  if (verdictStatusInterval) clearInterval(verdictStatusInterval);
+  verdictStatusInterval = setInterval(() => {
+    idx = (idx + 1) % phrases.length;
+    statusEl.textContent = phrases[idx];
+  }, 1500);
+}
+
+function stopRotatingVerdictStatus() {
+  if (verdictStatusInterval) {
+    clearInterval(verdictStatusInterval);
+    verdictStatusInterval = null;
   }
 }
 
 function resetCompareView() {
+  stopRotatingVerdictStatus();
   const entrySec = dom.compareEntrySection;
   const resultsSec = dom.compareResultsSection;
   const debateSec = dom.debateContainer;
@@ -3013,87 +3090,107 @@ function resetCompareView() {
   if (debateSec) debateSec.classList.add('hidden');
 
   compareState.currentComparison = null;
+  compareState.isLoading = false;
   compareState.debate = { active: false, userChoice: null, history: [] };
-}
 
-async function launchComparison(titleAObj = null, titleBObj = null) {
-  const itemA = titleAObj || compareState.selectedA;
-  const itemB = titleBObj || compareState.selectedB;
-  if (!itemA || !itemB) return;
-
-  const entrySec = dom.compareEntrySection;
-  const loadingSec = dom.compareLoadingState;
-  const resultsSec = dom.compareResultsSection;
-
-  if (entrySec) entrySec.classList.add('hidden');
-  if (resultsSec) resultsSec.classList.add('hidden');
-  if (loadingSec) loadingSec.classList.remove('hidden');
-
-  try {
-    const res = await fetch('/api/compare', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        titleA: itemA.title,
-        idA: itemA.id,
-        typeA: itemA.media_type || itemA.type || 'movie',
-        titleB: itemB.title,
-        idB: itemB.id,
-        typeB: itemB.media_type || itemB.type || 'movie',
-        shields: ShieldsStore.getAll(),
-      }),
-    });
-
-    const data = await res.json();
-    if (loadingSec) loadingSec.classList.add('hidden');
-
-    if (data.error) {
-      alert(data.error);
-      if (entrySec) entrySec.classList.remove('hidden');
-      return;
-    }
-
-    compareState.currentComparison = data;
-    renderComparisonView(data);
-    if (resultsSec) resultsSec.classList.remove('hidden');
-  } catch (err) {
-    if (loadingSec) loadingSec.classList.add('hidden');
-    console.error('Launch compare error:', err);
-    if (entrySec) entrySec.classList.remove('hidden');
+  if (dom.btnLaunchCompare) {
+    dom.btnLaunchCompare.innerHTML = 'Compare';
+    checkLaunchButtonState();
   }
+  setCompareInputsDisabled(false);
 }
 
-function renderComparisonView(data) {
-  const { itemA, itemB, verdict } = data;
-
+function renderInitialComparisonSkeleton(itemA, itemB) {
+  // 1. Instant Heroes Header with both posters, titles, years & VS badge
   const heroesContainer = document.getElementById('compare-heroes-container');
   if (heroesContainer) {
+    const posterA = itemA.poster_url || (itemA.poster_path ? (itemA.poster_path.startsWith('http') ? itemA.poster_path : `https://image.tmdb.org/t/p/w500${itemA.poster_path}`) : '');
+    const posterB = itemB.poster_url || (itemB.poster_path ? (itemB.poster_path.startsWith('http') ? itemB.poster_path : `https://image.tmdb.org/t/p/w500${itemB.poster_path}`) : '');
+    const yearA = itemA.year || (itemA.release_date || itemA.first_air_date ? String(itemA.release_date || itemA.first_air_date).slice(0, 4) : '');
+    const yearB = itemB.year || (itemB.release_date || itemB.first_air_date ? String(itemB.release_date || itemB.first_air_date).slice(0, 4) : '');
+    const typeA = (itemA.type || itemA.media_type || 'movie').toUpperCase();
+    const typeB = (itemB.type || itemB.media_type || 'movie').toUpperCase();
+
     heroesContainer.innerHTML = `
       <div class="compare-hero-card">
-        ${itemA.poster_url ? `<img class="hero-poster" src="${escapeHtml(itemA.poster_url)}" alt="${escapeHtml(itemA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
+        ${posterA ? `<img class="hero-poster" src="${escapeHtml(posterA)}" alt="${escapeHtml(itemA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
         <div class="hero-info">
           <span class="picker-badge">Title A</span>
           <h3 class="hero-title">${escapeHtml(itemA.title)}</h3>
-          <span class="hero-year-badge">${escapeHtml(itemA.year || '')} • ${(itemA.type || 'movie').toUpperCase()}</span>
+          <span class="hero-year-badge">${escapeHtml(yearA)} • ${typeA}</span>
         </div>
       </div>
+      <div class="compare-hero-vs-badge">
+        <span class="vs-circle-sm">VS</span>
+      </div>
       <div class="compare-hero-card">
-        ${itemB.poster_url ? `<img class="hero-poster" src="${escapeHtml(itemB.poster_url)}" alt="${escapeHtml(itemB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
+        ${posterB ? `<img class="hero-poster" src="${escapeHtml(posterB)}" alt="${escapeHtml(itemB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
         <div class="hero-info">
           <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">Title B</span>
           <h3 class="hero-title">${escapeHtml(itemB.title)}</h3>
-          <span class="hero-year-badge">${escapeHtml(itemB.year || '')} • ${(itemB.type || 'movie').toUpperCase()}</span>
+          <span class="hero-year-badge">${escapeHtml(yearB)} • ${typeB}</span>
         </div>
       </div>
     `;
   }
 
+  // 2. Table Column Titles
+  const thA = document.getElementById('th-title-a');
+  const thB = document.getElementById('th-title-b');
+  if (thA) thA.textContent = itemA.title;
+  if (thB) thB.textContent = itemB.title;
+
+  // 3. Stage 1 Skeleton Rows for Table
+  const tbody = document.getElementById('compare-table-body');
+  const dataError = document.getElementById('compare-data-error');
+  const dataTable = document.getElementById('compare-data-table');
+  if (dataError) dataError.classList.add('hidden');
+  if (dataTable) dataTable.classList.remove('hidden');
+
+  if (tbody) {
+    const metrics = ['IMDb Rating', 'IMDb Votes', 'TMDB Rating', 'Runtime / Seasons', 'Genres', 'Status', 'Watch in India'];
+    tbody.innerHTML = metrics
+      .map(
+        () => `
+        <tr class="table-skeleton-row">
+          <td class="col-metric"><div class="sk-table-line metric"></div></td>
+          <td><div class="sk-table-line val"></div></td>
+          <td><div class="sk-table-line val"></div></td>
+        </tr>
+      `
+      )
+      .join('');
+  }
+
+  // 4. Stage 2 Skeleton for Verdict Block
+  const verdictLoading = document.getElementById('verdict-loading-state');
+  const verdictContent = document.getElementById('verdict-content');
+  const verdictError = document.getElementById('verdict-error-state');
+  if (verdictError) verdictError.classList.add('hidden');
+  if (verdictContent) verdictContent.classList.add('hidden');
+  if (verdictLoading) verdictLoading.classList.remove('hidden');
+
+  startRotatingVerdictStatus();
+
+  // 5. Update Debate side names
+  const btnNameA = document.getElementById('btn-name-a');
+  const btnNameB = document.getElementById('btn-name-b');
+  if (btnNameA) btnNameA.textContent = itemA.title;
+  if (btnNameB) btnNameB.textContent = itemB.title;
+}
+
+function renderComparisonTable(itemA, itemB) {
   const thA = document.getElementById('th-title-a');
   const thB = document.getElementById('th-title-b');
   if (thA) thA.textContent = itemA.title;
   if (thB) thB.textContent = itemB.title;
 
   const tbody = document.getElementById('compare-table-body');
+  const dataTable = document.getElementById('compare-data-table');
+  const dataError = document.getElementById('compare-data-error');
+  if (dataError) dataError.classList.add('hidden');
+  if (dataTable) dataTable.classList.remove('hidden');
+
   if (tbody) {
     const imdbA = parseFloat(itemA.imdb_rating) || 0;
     const imdbB = parseFloat(itemB.imdb_rating) || 0;
@@ -3145,7 +3242,9 @@ function renderComparisonView(data) {
       </tr>
     `;
   }
+}
 
+function renderVerdictBlock(verdict, itemA, itemB) {
   const catGrid = document.getElementById('verdict-categories-grid');
   if (catGrid && verdict?.categories) {
     const cats = [
@@ -3199,29 +3298,214 @@ function renderComparisonView(data) {
       </div>
     `;
   }
+}
 
-  const btnNameA = document.getElementById('btn-name-a');
-  const btnNameB = document.getElementById('btn-name-b');
-  if (btnNameA) btnNameA.textContent = itemA.title;
-  if (btnNameB) btnNameB.textContent = itemB.title;
+async function fetchAndRenderVerdict(itemA, itemB) {
+  const verdictLoading = document.getElementById('verdict-loading-state');
+  const verdictContent = document.getElementById('verdict-content');
+  const verdictError = document.getElementById('verdict-error-state');
+
+  if (verdictError) verdictError.classList.add('hidden');
+  if (verdictContent) verdictContent.classList.add('hidden');
+  if (verdictLoading) verdictLoading.classList.remove('hidden');
+  startRotatingVerdictStatus();
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+  try {
+    const res = await fetch('/api/compare/verdict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        itemA,
+        itemB,
+        shields: ShieldsStore.getAll(),
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    const data = await res.json();
+
+    if (!data || data.error || !data.verdict) {
+      throw new Error(data?.error || 'Verdict generation failed');
+    }
+
+    stopRotatingVerdictStatus();
+    if (compareState.currentComparison) {
+      compareState.currentComparison.verdict = data.verdict;
+    }
+
+    renderVerdictBlock(data.verdict, itemA, itemB);
+
+    if (verdictLoading) verdictLoading.classList.add('hidden');
+    if (verdictContent) {
+      verdictContent.classList.remove('hidden');
+      verdictContent.classList.remove('fade-in');
+      void verdictContent.offsetWidth; // Trigger reflow for smooth animation
+      verdictContent.classList.add('fade-in');
+    }
+    if (dom.btnCompareDebateToggle) dom.btnCompareDebateToggle.disabled = false;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    stopRotatingVerdictStatus();
+    console.warn('Stage 2 verdict error:', err);
+    if (verdictLoading) verdictLoading.classList.add('hidden');
+    if (verdictError) verdictError.classList.remove('hidden');
+  }
+}
+
+function showCompareDataError(msg) {
+  const dataTable = document.getElementById('compare-data-table');
+  const dataError = document.getElementById('compare-data-error');
+  if (dataTable) dataTable.classList.add('hidden');
+  if (dataError) {
+    dataError.classList.remove('hidden');
+    const msgEl = dataError.querySelector('.error-msg');
+    if (msgEl) msgEl.textContent = msg || "Couldn't load this comparison. Try again";
+  }
+  const verdictLoading = document.getElementById('verdict-loading-state');
+  if (verdictLoading) verdictLoading.classList.add('hidden');
+  stopRotatingVerdictStatus();
+}
+
+async function launchComparison(titleAObj = null, titleBObj = null) {
+  if (compareState.isLoading) return;
+
+  const itemA = titleAObj || compareState.selectedA;
+  const itemB = titleBObj || compareState.selectedB;
+  if (!itemA || !itemB) return;
+
+  compareState.isLoading = true;
+
+  const entrySec = dom.compareEntrySection;
+  const resultsSec = dom.compareResultsSection;
+
+  // 1. Instant feedback on click: switch immediately to comparison view
+  if (entrySec) entrySec.classList.add('hidden');
+  if (resultsSec) resultsSec.classList.remove('hidden');
+
+  renderInitialComparisonSkeleton(itemA, itemB);
+
+  // Compare button disabled with small spinner and "Comparing..." text
+  if (dom.btnLaunchCompare) {
+    dom.btnLaunchCompare.disabled = true;
+    dom.btnLaunchCompare.innerHTML = '<span class="btn-spinner"></span> Comparing...';
+  }
+  setCompareInputsDisabled(true);
+
+  if (dom.btnCompareReset) dom.btnCompareReset.disabled = true;
+  if (dom.btnCompareSwap) dom.btnCompareSwap.disabled = true;
+  if (dom.btnCompareDebateToggle) dom.btnCompareDebateToggle.disabled = true;
+
+  try {
+    // Stage 1: Fetch TMDB and OMDb data in parallel with 20s timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+    let stage1Data = null;
+    try {
+      const res = await fetch('/api/compare/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titleA: itemA.title,
+          idA: itemA.id,
+          typeA: itemA.media_type || itemA.type || 'movie',
+          titleB: itemB.title,
+          idB: itemB.id,
+          typeB: itemB.media_type || itemB.type || 'movie',
+          shields: ShieldsStore.getAll(),
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      stage1Data = await res.json();
+    } catch (err) {
+      clearTimeout(timeoutId);
+      console.warn('Stage 1 comparison data fetch error:', err);
+    }
+
+    if (!stage1Data || stage1Data.error || !stage1Data.itemA || !stage1Data.itemB) {
+      showCompareDataError(stage1Data?.error || "Couldn't load this comparison. Try again");
+      return;
+    }
+
+    const resolvedA = stage1Data.itemA;
+    const resolvedB = stage1Data.itemB;
+
+    compareState.currentComparison = { itemA: resolvedA, itemB: resolvedB, verdict: null };
+
+    // Update heroes with fully resolved metadata & high-res posters
+    const heroesContainer = document.getElementById('compare-heroes-container');
+    if (heroesContainer) {
+      heroesContainer.innerHTML = `
+        <div class="compare-hero-card">
+          ${resolvedA.poster_url ? `<img class="hero-poster" src="${escapeHtml(resolvedA.poster_url)}" alt="${escapeHtml(resolvedA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
+          <div class="hero-info">
+            <span class="picker-badge">Title A</span>
+            <h3 class="hero-title">${escapeHtml(resolvedA.title)}</h3>
+            <span class="hero-year-badge">${escapeHtml(resolvedA.year || '')} • ${(resolvedA.type || 'movie').toUpperCase()}</span>
+          </div>
+        </div>
+        <div class="compare-hero-vs-badge">
+          <span class="vs-circle-sm">VS</span>
+        </div>
+        <div class="compare-hero-card">
+          ${resolvedB.poster_url ? `<img class="hero-poster" src="${escapeHtml(resolvedB.poster_url)}" alt="${escapeHtml(resolvedB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
+          <div class="hero-info">
+            <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">Title B</span>
+            <h3 class="hero-title">${escapeHtml(resolvedB.title)}</h3>
+            <span class="hero-year-badge">${escapeHtml(resolvedB.year || '')} • ${(resolvedB.type || 'movie').toUpperCase()}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // Render table immediately (does not wait for verdict!)
+    renderComparisonTable(resolvedA, resolvedB);
+
+    if (dom.btnCompareReset) dom.btnCompareReset.disabled = false;
+    if (dom.btnCompareSwap) dom.btnCompareSwap.disabled = false;
+
+    // Stage 2: Request AI verdict separately
+    await fetchAndRenderVerdict(resolvedA, resolvedB);
+  } catch (err) {
+    console.error('Launch comparison error:', err);
+    showCompareDataError("Couldn't load this comparison. Try again");
+  } finally {
+    compareState.isLoading = false;
+    setCompareInputsDisabled(false);
+    if (dom.btnLaunchCompare) {
+      dom.btnLaunchCompare.innerHTML = 'Compare';
+      checkLaunchButtonState();
+    }
+  }
 }
 
 function swapCompareSides() {
-  if (!compareState.currentComparison) return;
+  if (!compareState.currentComparison || !compareState.currentComparison.itemA || !compareState.currentComparison.itemB) return;
   const { itemA, itemB, verdict } = compareState.currentComparison;
 
-  const newVerdict = {
-    ...verdict,
-    categories: {
-      story: flipCategoryWinner(verdict.categories.story),
-      acting: flipCategoryWinner(verdict.categories.acting),
-      pacing: flipCategoryWinner(verdict.categories.pacing),
-      rewatch_value: flipCategoryWinner(verdict.categories.rewatch_value),
-      cultural_impact: flipCategoryWinner(verdict.categories.cultural_impact),
-    },
-    watch_a_if: verdict.watch_b_if,
-    watch_b_if: verdict.watch_a_if,
-  };
+  let newVerdict = null;
+  if (verdict && verdict.categories) {
+    newVerdict = {
+      ...verdict,
+      categories: {
+        story: flipCategoryWinner(verdict.categories.story),
+        acting: flipCategoryWinner(verdict.categories.acting),
+        pacing: flipCategoryWinner(verdict.categories.pacing),
+        rewatch_value: flipCategoryWinner(verdict.categories.rewatch_value),
+        cultural_impact: flipCategoryWinner(verdict.categories.cultural_impact),
+      },
+      watch_a_if: verdict.watch_b_if,
+      watch_b_if: verdict.watch_a_if,
+    };
+  }
+
+  const prevA = compareState.selectedA;
+  compareState.selectedA = compareState.selectedB;
+  compareState.selectedB = prevA;
 
   compareState.currentComparison = {
     itemA: itemB,
@@ -3229,7 +3513,41 @@ function swapCompareSides() {
     verdict: newVerdict,
   };
 
-  renderComparisonView(compareState.currentComparison);
+  const heroesContainer = document.getElementById('compare-heroes-container');
+  if (heroesContainer) {
+    heroesContainer.innerHTML = `
+      <div class="compare-hero-card">
+        ${itemB.poster_url ? `<img class="hero-poster" src="${escapeHtml(itemB.poster_url)}" alt="${escapeHtml(itemB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
+        <div class="hero-info">
+          <span class="picker-badge">Title A</span>
+          <h3 class="hero-title">${escapeHtml(itemB.title)}</h3>
+          <span class="hero-year-badge">${escapeHtml(itemB.year || '')} • ${(itemB.type || 'movie').toUpperCase()}</span>
+        </div>
+      </div>
+      <div class="compare-hero-vs-badge">
+        <span class="vs-circle-sm">VS</span>
+      </div>
+      <div class="compare-hero-card">
+        ${itemA.poster_url ? `<img class="hero-poster" src="${escapeHtml(itemA.poster_url)}" alt="${escapeHtml(itemA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
+        <div class="hero-info">
+          <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">Title B</span>
+          <h3 class="hero-title">${escapeHtml(itemA.title)}</h3>
+          <span class="hero-year-badge">${escapeHtml(itemA.year || '')} • ${(itemA.type || 'movie').toUpperCase()}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  renderComparisonTable(itemB, itemA);
+
+  if (newVerdict) {
+    renderVerdictBlock(newVerdict, itemB, itemA);
+  }
+
+  const btnNameA = document.getElementById('btn-name-a');
+  const btnNameB = document.getElementById('btn-name-b');
+  if (btnNameA) btnNameA.textContent = itemB.title;
+  if (btnNameB) btnNameB.textContent = itemA.title;
 }
 
 function flipCategoryWinner(catObj) {
@@ -3249,6 +3567,29 @@ function toggleDebateSection() {
   if (isHidden) {
     debateContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
+}
+
+function showDebateTypingIndicator() {
+  const thread = dom.debateThread;
+  if (!thread || document.getElementById('debate-typing-turn')) return;
+  const typingEl = document.createElement('div');
+  typingEl.className = 'debate-turn bot typing';
+  typingEl.id = 'debate-typing-turn';
+  typingEl.innerHTML = `
+    <span class="debate-turn-author">Kinora</span>
+    <div class="typing-indicator">
+      <span class="typing-dot"></span>
+      <span class="typing-dot"></span>
+      <span class="typing-dot"></span>
+    </div>
+  `;
+  thread.appendChild(typingEl);
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function removeDebateTypingIndicator() {
+  const el = document.getElementById('debate-typing-turn');
+  if (el) el.remove();
 }
 
 async function startDebateWithChoice(side) {
@@ -3290,6 +3631,12 @@ async function fetchDebateCounterTurn(userMsg) {
   if (!compareState.currentComparison) return;
   const { itemA, itemB } = compareState.currentComparison;
 
+  // Show typing indicator immediately before fetching
+  showDebateTypingIndicator();
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+
   try {
     const res = await fetch('/api/debate', {
       method: 'POST',
@@ -3303,11 +3650,16 @@ async function fetchDebateCounterTurn(userMsg) {
         isEnding: false,
         shields: ShieldsStore.getAll(),
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
+    removeDebateTypingIndicator();
 
     const data = await res.json();
     appendDebateTurn('bot', data.message, data.points || []);
   } catch (err) {
+    clearTimeout(timeoutId);
+    removeDebateTypingIndicator();
     console.error('Debate error:', err);
     appendDebateTurn('bot', 'A spirited argument! Both titles push cinematic storytelling to highest peaks.', []);
   }
@@ -3349,6 +3701,11 @@ async function endDebateSession() {
   const replyForm = dom.debateReplyForm;
   if (replyForm) replyForm.classList.add('hidden');
 
+  showDebateTypingIndicator();
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+
   try {
     const res = await fetch('/api/debate', {
       method: 'POST',
@@ -3361,10 +3718,15 @@ async function endDebateSession() {
         isEnding: true,
         shields: ShieldsStore.getAll(),
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
+    removeDebateTypingIndicator();
     const data = await res.json();
     appendDebateTurn('bot', data.message || `Touché! Both ${itemA.title} and ${itemB.title} are true masterpieces. Let's call it a draw!`, []);
   } catch {
+    clearTimeout(timeoutId);
+    removeDebateTypingIndicator();
     appendDebateTurn('bot', `Touché! Both ${itemA.title} and ${itemB.title} are masterpieces. Let's call it a cinephile draw!`, []);
   }
 }
@@ -3401,41 +3763,9 @@ function detectComparisonQuery(text) {
 
 async function loadComparisonByTitles(titleA, titleB) {
   setMode('compare');
-  const entrySec = dom.compareEntrySection;
-  const loadingSec = dom.compareLoadingState;
-  const resultsSec = dom.compareResultsSection;
-
-  if (entrySec) entrySec.classList.add('hidden');
-  if (resultsSec) resultsSec.classList.add('hidden');
-  if (loadingSec) loadingSec.classList.remove('hidden');
-
-  try {
-    const res = await fetch('/api/compare', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        titleA,
-        titleB,
-        shields: ShieldsStore.getAll(),
-      }),
-    });
-    const data = await res.json();
-    if (loadingSec) loadingSec.classList.add('hidden');
-
-    if (data.error) {
-      alert(data.error);
-      if (entrySec) entrySec.classList.remove('hidden');
-      return;
-    }
-
-    compareState.currentComparison = data;
-    renderComparisonView(data);
-    if (resultsSec) resultsSec.classList.remove('hidden');
-  } catch (err) {
-    if (loadingSec) loadingSec.classList.add('hidden');
-    console.error('Comparison error:', err);
-    if (entrySec) entrySec.classList.remove('hidden');
-  }
+  compareState.selectedA = { title: titleA };
+  compareState.selectedB = { title: titleB };
+  await launchComparison(compareState.selectedA, compareState.selectedB);
 }
 
 document.addEventListener('DOMContentLoaded', init);
