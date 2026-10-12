@@ -1023,7 +1023,7 @@ function appendMessageToDOM(role, content, isStreaming = false, titleData = null
 
   const avatar = document.createElement('div');
   avatar.className = `avatar ${role === 'user' ? 'avatar-user' : 'avatar-bot'}`;
-  avatar.innerHTML = role === 'user' ? '👤' : '<img src="logo.png?v=2" alt="Kinora" class="avatar-logo-img" onerror="this.replaceWith(\'🎬\')" />';
+  avatar.innerHTML = role === 'user' ? '👤' : '<img src="logo.png?v=3" alt="Kinora" class="avatar-logo-img" onerror="this.replaceWith(\'🎬\')" />';
 
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble';
