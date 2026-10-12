@@ -308,84 +308,184 @@ const state = {
 };
 
 // ========================================================
+// 1.5 SVG ICON SYSTEM (Real Vector Graphics across Kinora)
+// ========================================================
+const ICONS = {
+  general: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+  'spoiler-safe': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+  'mood-picks': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x2="15.01" y1="9" x2="15" y2="9"/></svg>`,
+  quiz: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 4h16v6a6 6 0 0 1-12 0V4z"/><path d="M12 16v4"/><path d="M8 20h8"/></svg>`,
+  character: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>`,
+  compare: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>`,
+  'for-you': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+  film: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x2="17" y2="22" x1="17" y1="2"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>`,
+  galaxy: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="2" y1="12" x2="4" y2="12"/></svg>`,
+  coffee: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>`,
+  shield: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+  scale: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>`,
+  star: `<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+  clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  tv: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>`,
+  user: `<svg class="avatar-user-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+  search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+  brain: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>`,
+  rain: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></svg>`,
+  trophy: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 4h16v6a6 6 0 0 1-12 0V4z"/><path d="M12 16v4"/><path d="M8 20h8"/></svg>`,
+  sword: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/></svg>`,
+  flame: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>`,
+  bookmark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`,
+  fastForward: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 19 22 12 13 5 13 19"/><polygon points="2 19 11 12 2 5 2 19"/></svg>`,
+  sparkles: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>`,
+  ghost: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 10h.01"/><path d="M15 10h.01"/><path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z"/></svg>`,
+  cassette: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="8" cy="10" r="2"/><circle cx="16" cy="10" r="2"/><path d="M8 12h8"/><path d="M6 16h12"/></svg>`,
+  smile: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x2="15.01" y1="9" x2="15" y2="9"/></svg>`,
+  building: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="22" x2="9" y2="12"/><line x1="15" y1="22" x2="15" y2="12"/><line x1="4" y1="12" x2="20" y2="12"/></svg>`,
+  crown: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"/></svg>`,
+  flask: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 9h4M10 3v6l-6 10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2L14 9V3"/></svg>`,
+  rocket: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/></svg>`,
+  lightbulb: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M15 9a3 3 0 0 0-6 0c0 1.3.5 2.1 1.5 3.5.5.7.5 1.5.5 2.5h2c0-1 0-1.8.5-2.5 1-1.4 1.5-2.2 1.5-3.5z"/></svg>`,
+  fileText: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`,
+  close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  arrowRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`
+};
+
+const EMOJI_MAP = {
+  '⚡': 'general',
+  '🛡️': 'shield',
+  '🎭': 'mood-picks',
+  '🏆': 'quiz',
+  '🎙️': 'character',
+  '⚖️': 'compare',
+  '✨': 'sparkles',
+  '🌌': 'galaxy',
+  '☕': 'coffee',
+  '🎬': 'film',
+  '⭐': 'star',
+  '⏱️': 'clock',
+  '📺': 'tv',
+  '👤': 'user',
+  '🔍': 'search',
+  '🧠': 'brain',
+  '🌧️': 'rain',
+  '💔': 'rain',
+  '👻': 'ghost',
+  '📼': 'cassette',
+  '😂': 'smile',
+  '🏢': 'building',
+  '🐉': 'sword',
+  '👑': 'crown',
+  '🪐': 'galaxy',
+  '🧪': 'flask',
+  '🧙‍♂️': 'sparkles',
+  '🦾': 'general',
+  '⚗️': 'flask',
+  '👔': 'user',
+  '🚀': 'rocket',
+  '🦇': 'shield',
+  '⚔️': 'sword',
+  '🍿': 'film',
+  '💎': 'sparkles',
+  '🇯🇵': 'film',
+  '📝': 'fileText',
+  '💡': 'lightbulb',
+  '⏩': 'fastForward',
+  '⏳': 'clock',
+  '🤝': 'scale',
+  '✕': 'close',
+  '✓': 'check',
+  '+': 'plus',
+  '➔': 'arrowRight'
+};
+
+function renderIcon(keyOrEmoji) {
+  if (!keyOrEmoji) return '';
+  if (typeof keyOrEmoji === 'string' && keyOrEmoji.trim().startsWith('<svg')) return keyOrEmoji;
+  if (ICONS[keyOrEmoji]) return ICONS[keyOrEmoji];
+  if (EMOJI_MAP[keyOrEmoji] && ICONS[EMOJI_MAP[keyOrEmoji]]) return ICONS[EMOJI_MAP[keyOrEmoji]];
+  return ICONS.general;
+}
+
+// ========================================================
 // 2. MODE CONFIGURATION & WELCOME CONTENT
 // ========================================================
 const MODE_DATA = {
   general: {
-    icon: '⚡',
+    icon: 'general',
     title: 'Kinora AI',
     tagline: 'Every story, zero spoilers.',
     chips: [
-      { icon: '🌌', text: 'Mind-Bending Sci-Fi', desc: 'Under 2 hours • Twist endings', prompt: 'Recommend 3 mind-bending sci-fi movies under 2 hours' },
-      { icon: '🛡️', text: 'Dark S02E04 Safe Recap', desc: 'Spoiler Shield in action', prompt: 'I am on Season 2 Episode 4 of Dark. Give me a spoiler-safe recap' },
-      { icon: '⚖️', text: 'Breaking Bad vs BCS', desc: 'Side-by-side cinema showdown', prompt: 'Compare Breaking Bad vs Better Call Saul' },
-      { icon: '☕', text: 'Comfort Movie Night', desc: 'Cozy, warm & feel-good watches', prompt: 'Give me a cozy comfort movie to unwind after a long day' },
+      { icon: 'galaxy', text: 'Mind-Bending Sci-Fi', desc: 'Under 2 hours • Twist endings', prompt: 'Recommend 3 mind-bending sci-fi movies under 2 hours' },
+      { icon: 'shield', text: 'Dark S02E04 Safe Recap', desc: 'Spoiler Shield in action', prompt: 'I am on Season 2 Episode 4 of Dark. Give me a spoiler-safe recap' },
+      { icon: 'scale', text: 'Breaking Bad vs BCS', desc: 'Side-by-side cinema showdown', prompt: 'Compare Breaking Bad vs Better Call Saul' },
+      { icon: 'coffee', text: 'Comfort Movie Night', desc: 'Cozy, warm & feel-good watches', prompt: 'Give me a cozy comfort movie to unwind after a long day' },
     ],
   },
   'spoiler-safe': {
-    icon: '🛡️',
+    icon: 'spoiler-safe',
     title: 'Spoiler Shield',
     tagline: 'Guaranteed safe up to your exact episode.',
     chips: [
-      { icon: '⏳', text: 'Dark Progress Check', prompt: 'I am on Season 2 Episode 4 of Dark. Give me a spoiler-safe recap' },
-      { icon: '🏢', text: 'Severance S1 Recap', prompt: 'Give me a spoiler-safe recap of Severance Season 1 Episode 3' },
-      { icon: '🐉', text: 'House of the Dragon', prompt: 'Where am I safe without spoilers in House of the Dragon Season 1?' },
-      { icon: '👑', text: 'Succession Safe Recap', prompt: 'Succession Season 2 Episode 5 safe plot recap' },
+      { icon: 'clock', text: 'Dark Progress Check', prompt: 'I am on Season 2 Episode 4 of Dark. Give me a spoiler-safe recap' },
+      { icon: 'building', text: 'Severance S1 Recap', prompt: 'Give me a spoiler-safe recap of Severance Season 1 Episode 3' },
+      { icon: 'sword', text: 'House of the Dragon', prompt: 'Where am I safe without spoilers in House of the Dragon Season 1?' },
+      { icon: 'crown', text: 'Succession Safe Recap', prompt: 'Succession Season 2 Episode 5 safe plot recap' },
     ],
   },
   'mood-picks': {
-    icon: '🎭',
+    icon: 'mood-picks',
     title: 'Mood Picks',
     tagline: 'Tell me your vibe, get 3 tailored watches.',
     chips: [
-      { icon: '☕', text: 'Cozy & Heartwarming', prompt: 'Give me 3 lighthearted cozy movies to cheer me up' },
-      { icon: '🧠', text: 'Mind-Bending Mystery', prompt: 'Recommend 3 mind-bending mystery thrillers under 2 hours' },
-      { icon: '⚡', text: 'Hyped High-Octane', prompt: '3 pulse-pounding action movies with great pacing' },
-      { icon: '🌧️', text: 'Melancholic Drama', prompt: '3 beautifully bittersweet cinematic dramas' },
+      { icon: 'coffee', text: 'Cozy & Heartwarming', prompt: 'Give me 3 lighthearted cozy movies to cheer me up' },
+      { icon: 'brain', text: 'Mind-Bending Mystery', prompt: 'Recommend 3 mind-bending mystery thrillers under 2 hours' },
+      { icon: 'general', text: 'Hyped High-Octane', prompt: '3 pulse-pounding action movies with great pacing' },
+      { icon: 'rain', text: 'Melancholic Drama', prompt: '3 beautifully bittersweet cinematic dramas' },
     ],
   },
   quiz: {
-    icon: '🏆',
+    icon: 'quiz',
     title: 'Quiz & Trivia',
     tagline: 'Test your cinephile knowledge.',
     chips: [
-      { icon: '🪐', text: 'Interstellar Trivia', prompt: 'Quiz me on Interstellar with 3 multiple choice questions' },
-      { icon: '🧪', text: 'Breaking Bad Quiz', prompt: 'Quiz me on Breaking Bad with 3 trivia questions' },
-      { icon: '🧙‍♂️', text: 'Lord of the Rings', prompt: 'Give me 3 tough Lord of the Rings trivia questions' },
-      { icon: '🎬', text: 'Classic Cinema Quiz', prompt: 'Quiz me on classic 90s cinema trivia' },
+      { icon: 'galaxy', text: 'Interstellar Trivia', prompt: 'Quiz me on Interstellar with 3 multiple choice questions' },
+      { icon: 'flask', text: 'Breaking Bad Quiz', prompt: 'Quiz me on Breaking Bad with 3 trivia questions' },
+      { icon: 'sparkles', text: 'Lord of the Rings', prompt: 'Give me 3 tough Lord of the Rings trivia questions' },
+      { icon: 'film', text: 'Classic Cinema Quiz', prompt: 'Quiz me on classic 90s cinema trivia' },
     ],
   },
   character: {
-    icon: '🎙️',
+    icon: 'character',
     title: 'Character Chat',
     tagline: 'Chat directly in iconic character voices.',
     chips: [
-      { icon: '🦾', text: 'Tony Stark', prompt: 'Talk to Tony Stark about time travel and Jarvis' },
-      { icon: '⚗️', text: 'Walter White', prompt: 'Speak as Walter White about chemistry and ambition' },
-      { icon: '🔍', text: 'Sherlock Holmes', prompt: 'Speak as Sherlock Holmes and deduce my movie taste' },
-      { icon: '👔', text: 'Michael Scott', prompt: 'Speak as Michael Scott recommending a movie for movie night' },
+      { icon: 'general', text: 'Tony Stark', prompt: 'Talk to Tony Stark about time travel and Jarvis' },
+      { icon: 'flask', text: 'Walter White', prompt: 'Speak as Walter White about chemistry and ambition' },
+      { icon: 'search', text: 'Sherlock Holmes', prompt: 'Speak as Sherlock Holmes and deduce my movie taste' },
+      { icon: 'user', text: 'Michael Scott', prompt: 'Speak as Michael Scott recommending a movie for movie night' },
     ],
   },
   compare: {
-    icon: '⚖️',
+    icon: 'compare',
     title: 'Compare & Debate',
     tagline: 'Side-by-side breakdowns and honest verdicts.',
     chips: [
-      { icon: '⚖️', text: 'Breaking Bad vs BCS', prompt: 'Compare Breaking Bad vs Better Call Saul across writing, pacing, acting' },
-      { icon: '🚀', text: 'Interstellar vs Inception', prompt: 'Compare Interstellar vs Inception and give your verdict' },
-      { icon: '🦇', text: 'The Dark Knight vs The Batman', prompt: 'Compare The Dark Knight vs The Batman (2022)' },
-      { icon: '⚔️', text: 'House of Dragon vs Rings of Power', prompt: 'Compare House of the Dragon vs The Rings of Power' },
+      { icon: 'scale', text: 'Breaking Bad vs BCS', prompt: 'Compare Breaking Bad vs Better Call Saul across writing, pacing, acting' },
+      { icon: 'rocket', text: 'Interstellar vs Inception', prompt: 'Compare Interstellar vs Inception and give your verdict' },
+      { icon: 'shield', text: 'The Dark Knight vs The Batman', prompt: 'Compare The Dark Knight vs The Batman (2022)' },
+      { icon: 'sword', text: 'House of Dragon vs Rings of Power', prompt: 'Compare House of the Dragon vs The Rings of Power' },
     ],
   },
   'for-you': {
-    icon: '✨',
+    icon: 'for-you',
     title: 'Taste Profile',
     tagline: 'Personalized recommendations based on what you love.',
     chips: [
-      { icon: '✨', text: 'Recommend Based on Sci-Fi', prompt: 'Based on my love for Dark and Inception, recommend 3 hidden gems' },
-      { icon: '🍿', text: 'Weekend Watchlist Picks', prompt: 'Recommend 3 movies for my weekend watch' },
-      { icon: '🇯🇵', text: 'Anime Recommendations', prompt: 'Recommend 3 gateway anime movies with deep philosophical themes' },
-      { icon: '💎', text: 'Under-the-radar Gems', prompt: 'Recommend 3 highly-rated under-the-radar movies from 2023-2024' },
+      { icon: 'sparkles', text: 'Recommend Based on Sci-Fi', prompt: 'Based on my love for Dark and Inception, recommend 3 hidden gems' },
+      { icon: 'film', text: 'Weekend Watchlist Picks', prompt: 'Recommend 3 movies for my weekend watch' },
+      { icon: 'film', text: 'Anime Recommendations', prompt: 'Recommend 3 gateway anime movies with deep philosophical themes' },
+      { icon: 'sparkles', text: 'Under-the-radar Gems', prompt: 'Recommend 3 highly-rated under-the-radar movies from 2023-2024' },
     ],
   },
 };
@@ -395,6 +495,7 @@ const MODE_DATA = {
 // ========================================================
 const dom = {
   // Sidebar & Navigation
+  brandHomeLink: document.getElementById('brand-home-link'),
   sidebar: document.getElementById('sidebar'),
   btnToggleSidebar: document.getElementById('btn-toggle-sidebar'),
   mobileOverlay: document.getElementById('mobile-overlay'),
@@ -879,24 +980,34 @@ function updateWelcomeViewForMode(modeKey) {
       if (dom.heroChipsGrid) {
         dom.heroChipsGrid.innerHTML = `
           <button class="hero-chip-btn ${state.isGenerating ? 'ui-locked-disabled' : ''}" data-prompt="Give me a concise recap of ${escapeHtml(title)} up to ${escapeHtml(prog)}">
-            <span class="chip-icon">📝</span>
-            <span class="chip-text">Recap so far</span>
+            <span class="chip-icon">${renderIcon('fileText')}</span>
+            <div class="chip-meta">
+              <span class="chip-text">Recap so far</span>
+            </div>
           </button>
           <button class="hero-chip-btn ${state.isGenerating ? 'ui-locked-disabled' : ''}" data-prompt="Who is the main character in ${escapeHtml(title)}? Only tell me what is known up to ${escapeHtml(prog)}.">
-            <span class="chip-icon">👤</span>
-            <span class="chip-text">Who is [character]?</span>
+            <span class="chip-icon">${renderIcon('user')}</span>
+            <div class="chip-meta">
+              <span class="chip-text">Who is [character]?</span>
+            </div>
           </button>
           <button class="hero-chip-btn ${state.isGenerating ? 'ui-locked-disabled' : ''}" data-prompt="Explain ${escapeHtml(title)} ${escapeHtml(prog)} without spoiling anything ahead.">
-            <span class="chip-icon">🔍</span>
-            <span class="chip-text">Explain this episode</span>
+            <span class="chip-icon">${renderIcon('search')}</span>
+            <div class="chip-meta">
+              <span class="chip-text">Explain this episode</span>
+            </div>
           </button>
           <button class="hero-chip-btn ${state.isGenerating ? 'ui-locked-disabled' : ''}" data-prompt="Theory time: what theories make sense for ${escapeHtml(title)} based only on clues up to ${escapeHtml(prog)}?">
-            <span class="chip-icon">💡</span>
-            <span class="chip-text">Theory time</span>
+            <span class="chip-icon">${renderIcon('lightbulb')}</span>
+            <div class="chip-meta">
+              <span class="chip-text">Theory time</span>
+            </div>
           </button>
           <button class="hero-chip-btn btn-advance-ep-chip ${state.isGenerating ? 'ui-locked-disabled' : ''}" id="btn-advance-ep-chip">
-            <span class="chip-icon">⏩</span>
-            <span class="chip-text">I finished the next episode</span>
+            <span class="chip-icon">${renderIcon('fastForward')}</span>
+            <div class="chip-meta">
+              <span class="chip-text">I finished the next episode</span>
+            </div>
           </button>
         `;
         return;
@@ -908,20 +1019,28 @@ function updateWelcomeViewForMode(modeKey) {
       if (dom.heroChipsGrid) {
         dom.heroChipsGrid.innerHTML = `
           <button class="hero-chip-btn ${state.isGenerating ? 'ui-locked-disabled' : ''}" id="btn-setup-shield-chip">
-            <span class="chip-icon">🛡️</span>
-            <span class="chip-text">Set Up Your Show</span>
+            <span class="chip-icon">${renderIcon('shield')}</span>
+            <div class="chip-meta">
+              <span class="chip-text">Set Up Your Show</span>
+            </div>
           </button>
           <button class="hero-chip-btn ${state.isGenerating ? 'ui-locked-disabled' : ''}" data-prompt="I am on Season 2 Episode 4 of Dark. Give me a spoiler-safe recap">
-            <span class="chip-icon">⏳</span>
-            <span class="chip-text">Dark S02E04 Safe Recap</span>
+            <span class="chip-icon">${renderIcon('clock')}</span>
+            <div class="chip-meta">
+              <span class="chip-text">Dark S02E04 Safe Recap</span>
+            </div>
           </button>
           <button class="hero-chip-btn ${state.isGenerating ? 'ui-locked-disabled' : ''}" data-prompt="Give me a spoiler-safe recap of Severance Season 1 Episode 3">
-            <span class="chip-icon">🏢</span>
-            <span class="chip-text">Severance S1 Safe Recap</span>
+            <span class="chip-icon">${renderIcon('building')}</span>
+            <div class="chip-meta">
+              <span class="chip-text">Severance S1 Safe Recap</span>
+            </div>
           </button>
           <button class="hero-chip-btn ${state.isGenerating ? 'ui-locked-disabled' : ''}" data-prompt="Succession Season 2 Episode 5 safe plot recap">
-            <span class="chip-icon">👑</span>
-            <span class="chip-text">Succession S2 Safe Recap</span>
+            <span class="chip-icon">${renderIcon('crown')}</span>
+            <div class="chip-meta">
+              <span class="chip-text">Succession S2 Safe Recap</span>
+            </div>
           </button>
         `;
         return;
@@ -936,7 +1055,7 @@ function updateWelcomeViewForMode(modeKey) {
       .map(
         (chip) => `
         <button class="hero-chip-btn ${state.isGenerating ? 'ui-locked-disabled' : ''}" data-prompt="${escapeHtml(chip.prompt)}">
-          <span class="chip-icon">${chip.icon}</span>
+          <span class="chip-icon">${renderIcon(chip.icon)}</span>
           <div class="chip-meta">
             <span class="chip-text">${escapeHtml(chip.text)}</span>
             ${chip.desc ? `<span class="chip-desc">${escapeHtml(chip.desc)}</span>` : ''}
@@ -1023,7 +1142,7 @@ function appendMessageToDOM(role, content, isStreaming = false, titleData = null
 
   const avatar = document.createElement('div');
   avatar.className = `avatar ${role === 'user' ? 'avatar-user' : 'avatar-bot'}`;
-  avatar.innerHTML = role === 'user' ? '👤' : '<img src="logo.png?v=3" alt="Kinora" class="avatar-logo-img" onerror="this.replaceWith(\'🎬\')" />';
+  avatar.innerHTML = role === 'user' ? renderIcon('user') : `<img src="logo.png?v=3" alt="Kinora" class="avatar-logo-img" onerror="this.outerHTML='${renderIcon('film').replace(/"/g, '&quot;')}'" />`;
 
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble';
@@ -1064,7 +1183,7 @@ function addBubbleActions(bubble, content, titleData = null) {
   if (tData && tData.title) {
     const inspectBtn = document.createElement('button');
     inspectBtn.className = 'btn-bubble-action btn-bubble-inspect';
-    inspectBtn.innerHTML = `<span>🎬</span> ${escapeHtml(tData.title)} Details`;
+    inspectBtn.innerHTML = `${renderIcon('film')} <span>${escapeHtml(tData.title)} Details</span>`;
     inspectBtn.title = 'View details in Title Inspector';
     inspectBtn.addEventListener('click', () => {
       openTitleInspector(tData, tData.media_type || tData.type || 'movie', true);
@@ -1501,7 +1620,7 @@ function setMode(modeKey, saveSession = true) {
     dom.currentModeTitle.textContent = data.title;
   }
   if (dom.inputModeTag) {
-    dom.inputModeTag.textContent = `${data.icon} ${data.title}`;
+    dom.inputModeTag.innerHTML = `${renderIcon(data.icon)} <span>${escapeHtml(data.title)}</span>`;
   }
   updateRotatingPlaceholderMode(modeKey);
 
@@ -1614,12 +1733,12 @@ function renderWatchlistItems() {
       const title = isObj ? item.title : item;
       const year = isObj && item.year ? `(${item.year})` : '';
       const poster = isObj && item.poster ? item.poster : null;
-      const rating = isObj && item.imdb_rating ? `⭐ ${item.imdb_rating}` : (isObj && item.rating ? `🎬 ${item.rating}` : '');
+      const rating = isObj && item.imdb_rating ? `<span class="star-icon-wrap">${renderIcon('star')}</span> ${item.imdb_rating}` : (isObj && item.rating ? `<span class="film-icon-wrap">${renderIcon('film')}</span> ${item.rating}` : '');
 
       return `
         <div class="watchlist-item-rich">
           <div class="wl-left">
-            ${poster ? `<img class="wl-poster" src="${escapeHtml(poster)}" alt="" />` : `<div class="wl-poster" style="display:flex;align-items:center;justify-content:center;font-size:16px;">🎬</div>`}
+            ${poster ? `<img class="wl-poster" src="${escapeHtml(poster)}" alt="" />` : `<div class="wl-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
             <div class="wl-meta">
               <span class="wl-title" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
               <span class="wl-sub">${escapeHtml(year)} ${escapeHtml(rating)}</span>
@@ -1627,7 +1746,7 @@ function renderWatchlistItems() {
           </div>
           <div class="wl-actions">
             ${isObj && item.id ? `<button type="button" class="btn-wl-inspect" data-index="${index}" title="View Details">Details</button>` : ''}
-            <button type="button" class="btn-wl-remove" data-index="${index}" title="Remove">✕</button>
+            <button type="button" class="btn-wl-remove" data-index="${index}" title="Remove" aria-label="Remove">${renderIcon('close')}</button>
           </div>
         </div>
       `;
@@ -1734,7 +1853,7 @@ async function prepareTitleInspectorContent(mediaDataOrId, type = 'movie') {
 
     const posterHtml = data.poster_url
       ? `<div class="inspector-poster-container"><img class="inspector-poster" src="${escapeHtml(data.poster_url)}" alt="${escapeHtml(data.title)}" /></div>`
-      : `<div class="inspector-poster-container"><div class="inspector-poster-placeholder">🎬</div></div>`;
+      : `<div class="inspector-poster-container"><div class="inspector-poster-placeholder">${renderIcon('film')}</div></div>`;
 
     const genresHtml = (data.genres || [])
       .map((g) => `<span class="genre-pill">${escapeHtml(typeof g === 'string' ? g : g.name)}</span>`)
@@ -1742,7 +1861,7 @@ async function prepareTitleInspectorContent(mediaDataOrId, type = 'movie') {
 
     const inProviders = data.watch_providers_in?.flatrate || [];
     const providersHtml = inProviders.length > 0
-      ? inProviders.map((p) => `<span class="watch-badge">📺 ${escapeHtml(p)}</span>`).join('')
+      ? inProviders.map((p) => `<span class="watch-badge">${renderIcon('tv')} ${escapeHtml(p)}</span>`).join('')
       : `<span style="font-size:12px;color:var(--text-muted)">Not currently streaming in India</span>`;
 
     const castHtml = (data.cast || []).slice(0, 6)
@@ -1754,9 +1873,9 @@ async function prepareTitleInspectorContent(mediaDataOrId, type = 'movie') {
       <div class="inspector-card-title">${escapeHtml(data.title)} <span class="inspector-year">(${escapeHtml(data.year || '')})</span></div>
 
       <div class="inspector-ratings-row">
-        ${data.imdb_rating ? `<span class="badge-rating imdb">⭐ IMDb ${escapeHtml(String(data.imdb_rating))}</span>` : ''}
-        ${data.tmdb_rating ? `<span class="badge-rating tmdb">🎬 TMDB ${escapeHtml(String(data.tmdb_rating))}</span>` : ''}
-        ${data.duration ? `<span class="badge-rating duration">⏱️ ${escapeHtml(data.duration)}</span>` : ''}
+        ${data.imdb_rating ? `<span class="badge-rating imdb"><span class="star-icon-wrap">${renderIcon('star')}</span> IMDb ${escapeHtml(String(data.imdb_rating))}</span>` : ''}
+        ${data.tmdb_rating ? `<span class="badge-rating tmdb"><span class="film-icon-wrap">${renderIcon('film')}</span> TMDB ${escapeHtml(String(data.tmdb_rating))}</span>` : ''}
+        ${data.duration ? `<span class="badge-rating duration"><span class="clock-icon-wrap">${renderIcon('clock')}</span> ${escapeHtml(data.duration)}</span>` : ''}
       </div>
 
       ${genresHtml ? `<div class="inspector-genres">${genresHtml}</div>` : ''}
@@ -2014,7 +2133,7 @@ function renderTopbarShieldChips() {
       const posterSrc = s.poster || s.poster_path;
       return `
         <div class="shield-chip ${isAct ? 'active' : ''}" data-shield-id="${escapeHtml(String(s.tmdbId || s.title))}" title="${escapeHtml(s.title)} (${escapeHtml(s.progress || 'S1 E1')})">
-          ${posterSrc ? `<img class="chip-poster" src="${escapeHtml(posterSrc)}" alt="" />` : `<span class="chip-icon">🛡️</span>`}
+          ${posterSrc ? `<img class="chip-poster" src="${escapeHtml(posterSrc)}" alt="" />` : `<span class="chip-icon">${renderIcon('shield')}</span>`}
           <span class="chip-title">${escapeHtml(s.title)}</span>
           <span class="chip-progress">${escapeHtml(s.progress || 'S1 E1')}</span>
         </div>
@@ -2039,7 +2158,7 @@ function renderTopbarShieldChips() {
           const posterSrc = s.poster || s.poster_path;
           return `
             <div class="shield-chip overflow-item ${isAct ? 'active' : ''}" data-shield-id="${escapeHtml(String(s.tmdbId || s.title))}">
-              ${posterSrc ? `<img class="chip-poster" src="${escapeHtml(posterSrc)}" alt="" />` : `<span class="chip-icon">🛡️</span>`}
+              ${posterSrc ? `<img class="chip-poster" src="${escapeHtml(posterSrc)}" alt="" />` : `<span class="chip-icon">${renderIcon('shield')}</span>`}
               <span class="chip-title">${escapeHtml(s.title)}</span>
               <span class="chip-progress">${escapeHtml(s.progress || 'S1 E1')}</span>
             </div>
@@ -2150,7 +2269,7 @@ function renderPopupShieldCards() {
       return `
         <div class="shield-card ${isAct ? 'is-active' : ''}" data-shield-id="${itemKey}">
           <div class="shield-card-left">
-            ${posterSrc ? `<img class="shield-card-thumb" src="${escapeHtml(posterSrc)}" alt="" />` : `<div class="shield-card-thumb" style="display:flex;align-items:center;justify-content:center;font-size:20px;">🎬</div>`}
+            ${posterSrc ? `<img class="shield-card-thumb" src="${escapeHtml(posterSrc)}" alt="" />` : `<div class="shield-card-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
             <div class="shield-card-meta">
               <div class="shield-card-title-row">
                 <span class="shield-card-title">${escapeHtml(item.title)}</span>
@@ -2282,7 +2401,7 @@ function renderMediaSearchResults(results) {
       const year = item.year || '';
       return `
         <div class="shield-result-item" data-media-id="${item.id}" data-media-type="${escapeHtml(item.media_type || 'tv')}">
-          ${poster ? `<img class="shield-result-thumb" src="${escapeHtml(poster)}" alt="" />` : `<div class="shield-result-thumb" style="display:flex;align-items:center;justify-content:center;font-size:20px;">🎬</div>`}
+          ${poster ? `<img class="shield-result-thumb" src="${escapeHtml(poster)}" alt="" />` : `<div class="shield-result-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
           <div class="shield-result-info">
             <div class="shield-result-title">${escapeHtml(item.title)}</div>
             <div class="shield-result-meta">
@@ -2744,21 +2863,61 @@ function bindEvents() {
     }
   });
 
+  // Brand Logo & Title Link: smoothly return to home / new chat on direct click
+  if (dom.brandHomeLink) {
+    dom.brandHomeLink.addEventListener('click', (e) => {
+      // Allow user to Ctrl+Click or Cmd+Click to open the external URL in a new tab
+      if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        e.preventDefault();
+        if (state.isGenerating) return;
+        setMode('general');
+        createNewChat();
+      }
+    });
+  }
+
   // New Chat button
   dom.btnNewChat.addEventListener('click', () => {
     if (!state.isGenerating) createNewChat();
   });
 
-  // Clear History
-  dom.btnClearHistory.addEventListener('click', () => {
+  // Clear History (Dustbin Button): Reliable, popup-free, mobile-friendly with 5s Undo Toast
+  dom.btnClearHistory.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (state.isGenerating) return;
-    if (confirm('Clear all conversation history?')) {
-      state.sessions = [];
-      state.currentSessionId = null;
+
+    if (!state.sessions || state.sessions.length === 0) {
+      showUndoToast('No conversations to clear', null);
+      return;
+    }
+
+    const previousSessions = [...state.sessions];
+    const previousSessionId = state.currentSessionId;
+
+    // Clear state & storage
+    state.sessions = [];
+    state.currentSessionId = null;
+    try {
+      localStorage.removeItem(STORAGE_KEYS.SESSIONS);
+      localStorage.removeItem(STORAGE_KEYS.ACTIVE_SESSION);
+    } catch (err) {
+      console.warn('Storage clear error:', err);
+    }
+
+    // Reset UI to clean welcome
+    createNewChat();
+    renderHistory();
+    closeMobileSidebar();
+
+    // 5-second Undo Toast
+    showUndoToast('Chat history cleared • Undo', () => {
+      state.sessions = previousSessions;
+      state.currentSessionId = previousSessionId;
       saveSessionsToStorage();
       renderHistory();
       renderActiveSession();
-    }
+    });
   });
 
   // Mode Selection: ONLY switches mode and shows welcome view, DOES NOT send message!
@@ -3469,7 +3628,7 @@ function createMoodCardHtml(p, idx) {
   return `
     <div class="mood-pick-card" id="mood-card-${p.id}" data-pick-id="${p.id}">
       <div class="pick-poster-wrap">
-        ${p.poster_url ? `<img class="pick-poster" src="${escapeHtml(p.poster_url)}" alt="${escapeHtml(p.title)}" loading="lazy" />` : `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:32px;">🎬</div>`}
+        ${p.poster_url ? `<img class="pick-poster" src="${escapeHtml(p.poster_url)}" alt="${escapeHtml(p.title)}" loading="lazy" />` : `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);">${renderIcon('film')}</div>`}
       </div>
       <div class="pick-details">
         <div>
@@ -3479,9 +3638,9 @@ function createMoodCardHtml(p, idx) {
             <span class="card-badge-label ${labelClass}">${escapeHtml(p.card_label || 'Fan favourite')}</span>
           </div>
           <div class="pick-meta-row" style="margin-top:4px;">
-            ${p.imdb_rating ? `<span class="badge-rating imdb">⭐ IMDb ${escapeHtml(String(p.imdb_rating))}</span>` : ''}
-            ${p.tmdb_rating ? `<span class="badge-rating tmdb">🎬 TMDB ${escapeHtml(String(p.tmdb_rating))}</span>` : ''}
-            ${p.duration ? `<span class="badge-rating duration">⏱️ ${escapeHtml(p.duration)}</span>` : ''}
+            ${p.imdb_rating ? `<span class="badge-rating imdb"><span class="star-icon-wrap">${renderIcon('star')}</span> IMDb ${escapeHtml(String(p.imdb_rating))}</span>` : ''}
+            ${p.tmdb_rating ? `<span class="badge-rating tmdb"><span class="film-icon-wrap">${renderIcon('film')}</span> TMDB ${escapeHtml(String(p.tmdb_rating))}</span>` : ''}
+            ${p.duration ? `<span class="badge-rating duration"><span class="clock-icon-wrap">${renderIcon('clock')}</span> ${escapeHtml(p.duration)}</span>` : ''}
           </div>
           <div class="pick-blurb" data-pick-id="${p.id}">${escapeHtml(blurbText)}</div>
           <div class="pick-providers-row">
@@ -3491,7 +3650,7 @@ function createMoodCardHtml(p, idx) {
         </div>
         <div class="pick-actions-row">
           <button type="button" class="btn-pick-action btn-add-wl ${inWl ? 'saved' : ''}" data-pick-id="${p.id}">
-            ${inWl ? '✓ Saved' : '+ Add to Watchlist'}
+            ${inWl ? `${renderIcon('check')} Saved` : `${renderIcon('plus')} Add to Watchlist`}
           </button>
           <button type="button" class="btn-pick-action btn-pick-details" data-pick-id="${p.id}">
             Details
@@ -3513,7 +3672,7 @@ function bindMoodCardEvents(cardEl, pick) {
     btnWl.addEventListener('click', () => {
       const isSaved = toggleWatchlist(pick);
       btnWl.classList.toggle('saved', isSaved);
-      btnWl.textContent = isSaved ? '✓ Saved' : '+ Add to Watchlist';
+      btnWl.innerHTML = isSaved ? `${renderIcon('check')} Saved` : `${renderIcon('plus')} Add to Watchlist`;
     });
   }
 
@@ -3563,7 +3722,7 @@ function updateMoodCardWatchlistButtons() {
     if (pick) {
       const inWl = isItemInWatchlist(pick);
       btn.classList.toggle('saved', inWl);
-      btn.textContent = inWl ? '✓ Saved' : '+ Add to Watchlist';
+      btn.innerHTML = inWl ? `${renderIcon('check')} Saved` : `${renderIcon('plus')} Add to Watchlist`;
     }
   });
 }
@@ -3732,7 +3891,7 @@ async function searchCompareTitles(query, side) {
       .map(
         (r, i) => `
         <div class="compare-result-item" data-index="${i}">
-          ${r.poster_path ? `<img class="compare-result-poster" src="${escapeHtml(r.poster_path)}" alt="" />` : `<div class="compare-result-poster" style="display:flex;align-items:center;justify-content:center;font-size:12px;">🎬</div>`}
+          ${r.poster_path ? `<img class="compare-result-poster" src="${escapeHtml(r.poster_path)}" alt="" />` : `<div class="compare-result-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
           <div>
             <div class="compare-result-title">${escapeHtml(r.title)}</div>
             <div class="compare-result-year">${escapeHtml(r.year || '')} • ${escapeHtml(r.media_type || 'movie')}</div>
@@ -3877,7 +4036,7 @@ function renderInitialComparisonSkeleton(itemA, itemB) {
 
     heroesContainer.innerHTML = `
       <div class="compare-hero-card">
-        ${posterA ? `<img class="hero-poster" src="${escapeHtml(posterA)}" alt="${escapeHtml(itemA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
+        ${posterA ? `<img class="hero-poster" src="${escapeHtml(posterA)}" alt="${escapeHtml(itemA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
         <div class="hero-info">
           <span class="picker-badge">Title A</span>
           <h3 class="hero-title">${escapeHtml(itemA.title)}</h3>
@@ -3888,7 +4047,7 @@ function renderInitialComparisonSkeleton(itemA, itemB) {
         <span class="vs-circle-sm">VS</span>
       </div>
       <div class="compare-hero-card">
-        ${posterB ? `<img class="hero-poster" src="${escapeHtml(posterB)}" alt="${escapeHtml(itemB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
+        ${posterB ? `<img class="hero-poster" src="${escapeHtml(posterB)}" alt="${escapeHtml(itemB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
         <div class="hero-info">
           <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">Title B</span>
           <h3 class="hero-title">${escapeHtml(itemB.title)}</h3>
@@ -3981,8 +4140,8 @@ function renderComparisonTable(itemA, itemB) {
       </tr>
       <tr>
         <td class="col-metric">TMDB Rating</td>
-        <td><span class="${tmdbA > tmdbB ? 'better-val' : ''}">🎬 ${itemA.tmdb_rating ? itemA.tmdb_rating.toFixed(1) : 'N/A'}</span></td>
-        <td><span class="${tmdbB > tmdbA ? 'better-val' : ''}">🎬 ${itemB.tmdb_rating ? itemB.tmdb_rating.toFixed(1) : 'N/A'}</span></td>
+        <td><span class="${tmdbA > tmdbB ? 'better-val' : ''}"><span class="film-icon-wrap">${renderIcon('film')}</span> ${itemA.tmdb_rating ? itemA.tmdb_rating.toFixed(1) : 'N/A'}</span></td>
+        <td><span class="${tmdbB > tmdbA ? 'better-val' : ''}"><span class="film-icon-wrap">${renderIcon('film')}</span> ${itemB.tmdb_rating ? itemB.tmdb_rating.toFixed(1) : 'N/A'}</span></td>
       </tr>
       <tr>
         <td class="col-metric">Runtime / Seasons</td>
@@ -4024,19 +4183,22 @@ function renderVerdictBlock(verdict, itemA, itemB) {
         const catData = verdict.categories[key] || { winner: 'Tie', reason: 'Balanced craft.' };
         const win = catData.winner || 'Tie';
         let winClass = 'winner-tie';
-        let winLabel = '🤝 Tie';
+        let winLabel = 'Tie';
+        let winIcon = renderIcon('scale');
         if (win === 'A') {
           winClass = 'winner-a';
-          winLabel = `🏆 ${itemA.title}`;
+          winLabel = itemA.title;
+          winIcon = renderIcon('trophy');
         } else if (win === 'B') {
           winClass = 'winner-b';
-          winLabel = `🏆 ${itemB.title}`;
+          winLabel = itemB.title;
+          winIcon = renderIcon('trophy');
         }
 
         return `
           <div class="verdict-cat-card">
             <span class="cat-label">${label}</span>
-            <span class="cat-winner ${winClass}">${escapeHtml(winLabel)}</span>
+            <span class="cat-winner ${winClass}">${winIcon} <span>${escapeHtml(winLabel)}</span></span>
             <span class="cat-reason">${escapeHtml(catData.reason || '')}</span>
           </div>
         `;
@@ -4205,7 +4367,7 @@ async function launchComparison(titleAObj = null, titleBObj = null) {
     if (heroesContainer) {
       heroesContainer.innerHTML = `
         <div class="compare-hero-card">
-          ${resolvedA.poster_url ? `<img class="hero-poster" src="${escapeHtml(resolvedA.poster_url)}" alt="${escapeHtml(resolvedA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
+          ${resolvedA.poster_url ? `<img class="hero-poster" src="${escapeHtml(resolvedA.poster_url)}" alt="${escapeHtml(resolvedA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
           <div class="hero-info">
             <span class="picker-badge">Title A</span>
             <h3 class="hero-title">${escapeHtml(resolvedA.title)}</h3>
@@ -4216,7 +4378,7 @@ async function launchComparison(titleAObj = null, titleBObj = null) {
           <span class="vs-circle-sm">VS</span>
         </div>
         <div class="compare-hero-card">
-          ${resolvedB.poster_url ? `<img class="hero-poster" src="${escapeHtml(resolvedB.poster_url)}" alt="${escapeHtml(resolvedB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
+          ${resolvedB.poster_url ? `<img class="hero-poster" src="${escapeHtml(resolvedB.poster_url)}" alt="${escapeHtml(resolvedB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
           <div class="hero-info">
             <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">Title B</span>
             <h3 class="hero-title">${escapeHtml(resolvedB.title)}</h3>
@@ -4281,7 +4443,7 @@ function swapCompareSides() {
   if (heroesContainer) {
     heroesContainer.innerHTML = `
       <div class="compare-hero-card">
-        ${itemB.poster_url ? `<img class="hero-poster" src="${escapeHtml(itemB.poster_url)}" alt="${escapeHtml(itemB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
+        ${itemB.poster_url ? `<img class="hero-poster" src="${escapeHtml(itemB.poster_url)}" alt="${escapeHtml(itemB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
         <div class="hero-info">
           <span class="picker-badge">Title A</span>
           <h3 class="hero-title">${escapeHtml(itemB.title)}</h3>
@@ -4292,7 +4454,7 @@ function swapCompareSides() {
         <span class="vs-circle-sm">VS</span>
       </div>
       <div class="compare-hero-card">
-        ${itemA.poster_url ? `<img class="hero-poster" src="${escapeHtml(itemA.poster_url)}" alt="${escapeHtml(itemA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">🎬</div>`}
+        ${itemA.poster_url ? `<img class="hero-poster" src="${escapeHtml(itemA.poster_url)}" alt="${escapeHtml(itemA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
         <div class="hero-info">
           <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">Title B</span>
           <h3 class="hero-title">${escapeHtml(itemA.title)}</h3>

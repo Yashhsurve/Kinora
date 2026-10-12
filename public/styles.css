@@ -165,7 +165,17 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 2px 4px;
+  padding: 4px 6px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast), opacity var(--transition-fast);
+}
+
+.brand:hover {
+  background: rgba(255, 255, 255, 0.05);
+  opacity: 0.95;
 }
 
 .brand-icon {
@@ -308,7 +318,20 @@ button {
 }
 
 .mode-icon {
-  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.mode-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+  display: block;
 }
 
 .mode-title {
@@ -622,22 +645,36 @@ button {
 }
 
 .btn-icon-subtle {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  padding: 4px;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: color var(--transition-fast);
+  transition: color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
 }
 
 .btn-icon-subtle svg {
   width: 15px;
   height: 15px;
+  pointer-events: none;
+  display: block;
 }
 
 .btn-icon-subtle:hover {
   color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-icon-subtle:active {
+  transform: scale(0.92);
 }
 
 .mobile-toggle {
@@ -747,6 +784,19 @@ button {
 .chip-icon {
   font-size: 20px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: var(--accent-primary);
+}
+
+.chip-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2;
+  display: block;
 }
 
 .chip-meta {
@@ -2801,7 +2851,19 @@ button {
 }
 
 .mood-emoji {
-  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--accent-primary);
+}
+
+.mood-emoji svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 1.8;
+  display: block;
 }
 
 .mood-label {
@@ -4101,4 +4163,138 @@ button {
 .btn-wl-remove:hover {
   color: #EF4444;
   background: rgba(239, 68, 68, 0.1);
+}
+
+/* ========================================================
+   VECTOR SVG ICONS DESIGN SYSTEM
+   ======================================================== */
+.view-icon,
+.debate-icon,
+.modal-icon,
+.inspector-icon,
+.fallback-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.view-icon svg,
+.debate-icon svg,
+.modal-icon svg,
+.inspector-icon svg,
+.fallback-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+  display: block;
+}
+
+.placeholder-icon svg {
+  width: 44px;
+  height: 44px;
+  color: var(--text-muted);
+  opacity: 0.7;
+  display: block;
+  margin: 0 auto;
+}
+
+.tag-icon-svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.2;
+  display: inline-block;
+  vertical-align: -2px;
+  color: var(--accent-primary);
+}
+
+.choice-icon-svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2;
+  display: inline-block;
+  vertical-align: -2.5px;
+  margin-right: 5px;
+  color: var(--accent-primary);
+}
+
+.avatar-user svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+  color: var(--text-secondary);
+  display: block;
+}
+
+.rating-star-icon {
+  width: 13px;
+  height: 13px;
+  fill: #eab308;
+  color: #eab308;
+  display: inline-block;
+  vertical-align: -1.5px;
+}
+
+.badge-icon-svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+  display: inline-block;
+  vertical-align: -2px;
+  color: currentColor;
+}
+
+.btn-inline-icon {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2;
+  display: inline-block;
+  vertical-align: -1.5px;
+}
+
+.star-icon-wrap,
+.film-icon-wrap,
+.clock-icon-wrap,
+.tv-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 3px;
+}
+
+.btn-wl-remove svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+.btn-pick-action svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.2;
+  display: inline-block;
+  vertical-align: -1.5px;
+  flex-shrink: 0;
+}
+
+.chip-icon svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+
+.pill-arrow svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+
+.hero-poster svg,
+.shield-card-thumb svg,
+.shield-result-thumb svg,
+.compare-result-poster svg {
+  width: 24px;
+  height: 24px;
+  opacity: 0.6;
+  display: block;
 }
