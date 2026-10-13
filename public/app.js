@@ -936,24 +936,53 @@ function renderMarkdown(text) {
 function createNewChat() {
   if (state.isGenerating) return;
 
-  const newSession = {
-    id: 'chat_' + Date.now(),
-    title: 'New Chat',
-    createdAt: new Date().toISOString(),
-    mode: state.currentMode,
-    messages: [],
-  };
+  // 1. Switch active mode to Kinora AI ('general')
+  setMode('general', false);
 
-  state.sessions.unshift(newSession);
-  state.currentSessionId = newSession.id;
+  // 2. Hide any open mode-specific views and modals
+  if (dom.moodPicksContainer) dom.moodPicksContainer.classList.add('hidden');
+  if (dom.compareContainer) dom.compareContainer.classList.add('hidden');
+  closeWatchlistModal();
+
+  // 3. Clear input box and reset height/styling
+  if (dom.chatInput) {
+    dom.chatInput.value = '';
+    updateChatInputHeight();
+    setChatInputFilled(false);
+  }
+
+  // 4. Close Title Inspector if showing a title from old chat
   state.activeTitleInspectorData = null;
   hideMobileInspectorPill();
   closeInspectorPanel(false);
+
+  // 5. Create fresh empty conversation (prevent duplicate empty sessions)
+  const activeSession = getActiveSession();
+  if (activeSession && (!activeSession.messages || activeSession.messages.length === 0)) {
+    activeSession.mode = 'general';
+    activeSession.title = 'New Chat';
+  } else {
+    const newSession = {
+      id: 'chat_' + Date.now(),
+      title: 'New Chat',
+      createdAt: new Date().toISOString(),
+      mode: 'general',
+      messages: [],
+    };
+    state.sessions.unshift(newSession);
+    state.currentSessionId = newSession.id;
+  }
+
   saveSessionsToStorage();
   renderHistory();
   renderActiveSession();
   closeMobileSidebar();
-  dom.chatInput.focus();
+
+  // 8. Move focus to chat input only on desktop (never on mobile touch devices)
+  const isDesktop = window.innerWidth > 768 && !('ontouchstart' in window);
+  if (isDesktop && dom.chatInput) {
+    dom.chatInput.focus();
+  }
 }
 
 function getActiveSession() {
@@ -969,6 +998,7 @@ function renderActiveSession() {
     if (dom.compareContainer) dom.compareContainer.classList.add('hidden');
     if (dom.heroWelcome) dom.heroWelcome.classList.add('hidden');
     if (dom.messagesContainer) dom.messagesContainer.classList.add('hidden');
+    syncPlatformChipsUI();
   } else if (state.currentMode === 'compare') {
     if (dom.compareContainer) dom.compareContainer.classList.remove('hidden');
     if (dom.moodPicksContainer) dom.moodPicksContainer.classList.add('hidden');
@@ -979,14 +1009,18 @@ function renderActiveSession() {
     if (dom.compareContainer) dom.compareContainer.classList.add('hidden');
 
     if (!session || !session.messages || session.messages.length === 0) {
-      dom.heroWelcome.classList.remove('hidden');
-      dom.messagesContainer.classList.add('hidden');
-      dom.messagesContainer.innerHTML = '';
+      if (dom.heroWelcome) dom.heroWelcome.classList.remove('hidden');
+      if (dom.messagesContainer) {
+        dom.messagesContainer.classList.add('hidden');
+        dom.messagesContainer.innerHTML = '';
+      }
       updateWelcomeViewForMode(state.currentMode);
     } else {
-      dom.heroWelcome.classList.add('hidden');
-      dom.messagesContainer.classList.remove('hidden');
-      dom.messagesContainer.innerHTML = '';
+      if (dom.heroWelcome) dom.heroWelcome.classList.add('hidden');
+      if (dom.messagesContainer) {
+        dom.messagesContainer.classList.remove('hidden');
+        dom.messagesContainer.innerHTML = '';
+      }
 
       session.messages.forEach((msg) => {
         appendMessageToDOM(msg.role, msg.content, false, msg.titleData);
@@ -1002,10 +1036,6 @@ function renderActiveSession() {
 
       scrollToBottom();
     }
-  }
-
-  if (session && session.mode) {
-    setMode(session.mode, false);
   }
 }
 
@@ -1152,15 +1182,30 @@ function renderHistory() {
 
     item.addEventListener('click', () => {
       if (state.isGenerating) return;
-      state.currentSessionId = s.id;
-      saveSessionsToStorage();
-      renderHistory();
-      renderActiveSession();
-      closeMobileSidebar();
+      switchSession(s.id);
     });
 
     dom.historyList.appendChild(item);
   });
+}
+
+function switchSession(id) {
+  if (state.isGenerating) return;
+  const session = state.sessions.find((s) => s.id === id);
+  if (!session) return;
+
+  state.currentSessionId = id;
+  const targetMode = session.mode || 'general';
+  setMode(targetMode, false);
+
+  state.activeTitleInspectorData = null;
+  hideMobileInspectorPill();
+  closeInspectorPanel(false);
+
+  saveSessionsToStorage();
+  renderHistory();
+  renderActiveSession();
+  closeMobileSidebar();
 }
 
 function deleteSession(id) {
@@ -1168,6 +1213,13 @@ function deleteSession(id) {
   state.sessions = state.sessions.filter((s) => s.id !== id);
   if (state.currentSessionId === id) {
     state.currentSessionId = state.sessions[0] ? state.sessions[0].id : null;
+    const nextSession = getActiveSession();
+    if (nextSession) {
+      setMode(nextSession.mode || 'general', false);
+    } else {
+      createNewChat();
+      return;
+    }
   }
   saveSessionsToStorage();
   renderHistory();
