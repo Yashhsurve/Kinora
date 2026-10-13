@@ -1225,11 +1225,12 @@ button {
   border-radius: var(--radius-md);
   padding: 10px 14px;
   box-shadow: var(--shadow-subtle);
-  transition: border-color var(--transition-fast);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .input-wrapper:focus-within {
-  border-color: var(--border-active);
+  border-color: rgba(124, 92, 255, 0.65);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.25);
 }
 
 .input-mode-tag {
@@ -1299,15 +1300,17 @@ button {
   transition: none !important;
 }
 
-/* When input has text or is focused */
+/* When input has text or is focused: fully hide placeholder overlay so no stray dots or marks linger */
 .input-field-wrap.has-text .rotating-placeholder,
 .input-field-wrap.is-focused .rotating-placeholder {
   opacity: 0 !important;
-  visibility: hidden;
-  pointer-events: none;
+  visibility: hidden !important;
+  display: none !important;
+  pointer-events: none !important;
 }
 
-.chat-input {
+.chat-input,
+textarea.chat-input {
   width: 100%;
   flex: 1;
   resize: none;
@@ -1316,9 +1319,26 @@ button {
   max-height: 140px;
   min-height: 24px;
   line-height: 1.5;
-  background: transparent;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 2px 0;
+  margin: 0;
   position: relative;
   z-index: 2;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.chat-input:focus,
+.chat-input:focus-visible,
+#chat-input:focus,
+#chat-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  background: transparent !important;
 }
 
 .chat-input::placeholder {
@@ -2036,67 +2056,184 @@ button {
   font-weight: 600;
 }
 
-/* Watchlist List Items */
+/* Watchlist Search & List Items */
+.watchlist-search-wrapper {
+  position: relative;
+  width: 100%;
+}
+
 .watchlist-input-row {
+  position: relative;
   display: flex;
-  gap: 8px;
+  align-items: center;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+  height: 44px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.watchlist-input-row:focus-within {
+  border-color: rgba(124, 92, 255, 0.65);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.2);
+}
+
+.watchlist-search-icon {
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  margin-right: 8px;
+  flex-shrink: 0;
 }
 
 .watchlist-input-row input {
   flex: 1;
-  padding: 8px 12px;
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 13.5px;
+  padding: 8px 0;
 }
 
-.watchlist-input-row input:focus {
-  border-color: var(--border-active);
+.watchlist-input-row input::placeholder {
+  color: var(--text-muted);
+}
+
+.watchlist-results-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.5), 0 6px 12px -4px rgba(0, 0, 0, 0.3);
+  z-index: 60;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wl-search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.wl-search-result-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.btn-wl-add-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-primary);
+  color: #FFFFFF;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.btn-wl-add-result:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.btn-wl-add-result.saved,
+.btn-wl-add-result:disabled {
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--accent-primary);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  cursor: default;
+  transform: none;
+}
+
+.watchlist-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 4px 0 6px;
+}
+
+.watchlist-filter-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wl-tab-btn {
+  padding: 5px 11px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wl-tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.wl-tab-btn.active {
+  color: var(--accent-primary);
+  background: rgba(139, 92, 246, 0.14);
+  border-color: rgba(139, 92, 246, 0.3);
+  font-weight: 600;
+}
+
+.watchlist-sort-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.wl-sort-select {
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
 }
 
 .watchlist-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-height: 280px;
+  gap: 8px;
+  max-height: 380px;
   overflow-y: auto;
-  margin-top: 6px;
-}
-
-.watchlist-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-}
-
-.watchlist-item-title {
-  font-weight: 500;
-}
-
-.watchlist-item-remove {
-  color: var(--text-muted);
-  font-size: 12px;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.watchlist-item-remove:hover {
-  color: #EF4444;
-  background: rgba(239, 68, 68, 0.1);
+  margin-top: 4px;
+  padding-right: 2px;
 }
 
 .watchlist-empty {
   font-size: 13px;
   color: var(--text-muted);
   text-align: center;
-  padding: 24px 10px;
+  padding: 30px 10px;
   font-style: italic;
 }
 
@@ -2521,6 +2658,10 @@ button {
    ======================================================== */
 .modal-dialog-lg {
   max-width: 520px;
+}
+
+#watchlist-modal .modal-dialog-lg {
+  max-width: 580px;
 }
 
 .shield-search-section {
@@ -3200,7 +3341,7 @@ button {
 /* --- MOOD PICKS ENTRY --- */
 .mood-picks-view {
   width: 100%;
-  max-width: var(--chat-max-width);
+  max-width: 1000px;
   margin: 0 auto;
   padding: 12px 0 24px;
   display: flex;
@@ -3734,7 +3875,7 @@ button {
 /* --- COMPARE & DEBATE --- */
 .compare-view {
   width: 100%;
-  max-width: var(--chat-max-width);
+  max-width: 940px;
   margin: 0 auto;
   padding: 12px 0 24px;
   display: flex;
@@ -4484,29 +4625,35 @@ button {
 }
 
 /* --- UPGRADED WATCHLIST MODAL ITEMS --- */
+/* --- UPGRADED WATCHLIST MODAL ITEMS --- */
 .watchlist-item-rich {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 12px;
+  padding: 10px 12px;
   background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  transition: all var(--transition-fast);
+  transition: border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.watchlist-item-rich:hover {
+  border-color: rgba(139, 92, 246, 0.35);
 }
 
 .wl-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex: 1;
+  min-width: 0;
   overflow: hidden;
 }
 
 .wl-poster {
-  width: 32px;
-  height: 48px;
+  width: 40px;
+  height: 58px;
   border-radius: 4px;
   object-fit: cover;
   background: var(--bg-surface);
@@ -4516,51 +4663,189 @@ button {
 .wl-meta {
   display: flex;
   flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
 }
 
+.wl-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .wl-title {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .wl-sub {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
-}
-
-.wl-actions {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.btn-wl-inspect {
-  padding: 4px 8px;
-  border-radius: 4px;
+.wl-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.wl-status-select {
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.wl-status-select:focus {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.btn-wl-inspect {
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-wl-inspect:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.btn-wl-remove {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-wl-remove:hover {
+  color: #EF4444;
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+/* Global Watchlist Action Buttons */
+.inspector-actions-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.btn-inspector-watchlist {
+  flex: 1;
+  min-width: 140px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: var(--accent-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-inspector-watchlist:hover {
+  background: rgba(139, 92, 246, 0.22);
+  border-color: var(--accent-primary);
+}
+
+.btn-inspector-watchlist.saved {
+  background: var(--accent-primary);
+  color: #FFFFFF;
+  border-color: var(--accent-primary);
+}
+
+.btn-bubble-watchlist {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-full);
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-bubble-watchlist:hover {
+  color: var(--text-primary);
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+.btn-bubble-watchlist.saved {
+  color: var(--accent-primary);
+  border-color: rgba(139, 92, 246, 0.35);
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.btn-compare-watchlist {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  margin-top: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-.btn-wl-inspect:hover {
-  color: var(--text-primary);
-  border-color: var(--border-active);
+.btn-compare-watchlist:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
-.btn-wl-remove {
-  color: var(--text-muted);
-  font-size: 12px;
-  padding: 4px 6px;
-  border-radius: 4px;
-  cursor: pointer;
+.btn-compare-watchlist.saved {
+  color: var(--accent-primary);
+  border-color: rgba(139, 92, 246, 0.35);
+  background: rgba(139, 92, 246, 0.12);
 }
 
 .btn-wl-remove:hover {

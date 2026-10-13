@@ -575,6 +575,12 @@ const dom = {
   btnCloseWatchlistModal: document.getElementById('btn-close-watchlist-modal'),
   watchlistForm: document.getElementById('watchlist-form'),
   watchlistAddInput: document.getElementById('watchlist-add-input'),
+  watchlistSearchWrapper: document.getElementById('watchlist-search-wrapper'),
+  watchlistSearchSpinner: document.getElementById('watchlist-search-spinner'),
+  watchlistSearchClear: document.getElementById('btn-watchlist-search-clear'),
+  watchlistSearchResults: document.getElementById('watchlist-search-results'),
+  watchlistFilterTabs: document.getElementById('watchlist-filter-tabs'),
+  watchlistSortSelect: document.getElementById('watchlist-sort-select'),
   watchlistList: document.getElementById('watchlist-list'),
 
   // Spoiler Shield Setup & Management
@@ -869,7 +875,10 @@ function loadFromStorage() {
     state.spoilerShield = ShieldsStore.getActive() || { active: false };
 
     const savedWatchlist = localStorage.getItem(STORAGE_KEYS.WATCHLIST);
-    state.watchlist = savedWatchlist ? JSON.parse(savedWatchlist) : [];
+    const parsedWatchlist = savedWatchlist ? JSON.parse(savedWatchlist) : [];
+    state.watchlist = Array.isArray(parsedWatchlist)
+      ? parsedWatchlist.map((item) => normalizeWatchlistEntry(item)).filter(Boolean)
+      : [];
 
     const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME);
     if (savedTheme) state.theme = savedTheme;
@@ -1219,6 +1228,18 @@ function addBubbleActions(bubble, content, titleData = null) {
       openTitleInspector(tData, tData.media_type || tData.type || 'movie', true);
     });
     actions.appendChild(inspectBtn);
+
+    const wlBtn = document.createElement('button');
+    wlBtn.className = 'btn-bubble-action btn-bubble-watchlist';
+    wlBtn.dataset.title = tData.title;
+    const inWl = isItemInWatchlist(tData);
+    if (inWl) wlBtn.classList.add('saved');
+    wlBtn.innerHTML = `${renderIcon(inWl ? 'check' : 'bookmark', 14)} <span>${inWl ? 'Saved' : 'Add to Watchlist'}</span>`;
+    wlBtn.title = inWl ? 'In Watchlist' : 'Add to Watchlist';
+    wlBtn.addEventListener('click', () => {
+      toggleWatchlist(tData);
+    });
+    actions.appendChild(wlBtn);
   }
 
   const copyBtn = document.createElement('button');
@@ -1689,122 +1710,135 @@ function setMode(modeKey, saveSession = true) {
 }
 
 // ========================================================
-// 11. WATCHLIST MODAL MANAGEMENT (Upgraded with Posters & Details)
+// 11. WATCHLIST MODAL MANAGEMENT (Upgraded with TMDB Search, Filters & Sync)
 // ========================================================
+let watchlistFilter = 'all'; // 'all' | 'movie' | 'tv' | 'watched'
+let watchlistSort = 'recent'; // 'recent' | 'title'
+let watchlistSearchDebounceTimer = null;
+let watchlistLastResults = [];
+
 function openWatchlistModal() {
   if (state.isGenerating) return;
+  if (dom.watchlistAddInput) dom.watchlistAddInput.value = '';
+  if (dom.watchlistSearchClear) dom.watchlistSearchClear.classList.add('hidden');
+  if (dom.watchlistSearchResults) {
+    dom.watchlistSearchResults.innerHTML = '';
+    dom.watchlistSearchResults.classList.add('hidden');
+  }
+  watchlistLastResults = [];
   renderWatchlistItems();
   dom.watchlistModal.classList.remove('hidden');
+  setTimeout(() => dom.watchlistAddInput?.focus(), 80);
 }
 
 function closeWatchlistModal() {
   dom.watchlistModal.classList.add('hidden');
+  if (dom.watchlistSearchResults) dom.watchlistSearchResults.classList.add('hidden');
 }
 
-function toggleWatchlist(itemObj) {
+function normalizeWatchlistEntry(itemObj) {
+  if (!itemObj) return null;
+  const isStr = typeof itemObj === 'string';
+  const title = isStr ? itemObj : (itemObj.title || itemObj.name || String(itemObj));
+  const rawId = !isStr ? (itemObj.id || itemObj.tmdbId || null) : null;
+  const id = rawId ? parseInt(rawId, 10) : null;
+  const rawType = !isStr ? (itemObj.type || itemObj.media_type || 'movie') : 'movie';
+  const type = (rawType === 'tv' || rawType === 'series') ? 'tv' : 'movie';
+  let year = '';
+  if (!isStr) {
+    year = itemObj.year || (itemObj.release_date || itemObj.first_air_date ? String(itemObj.release_date || itemObj.first_air_date).slice(0, 4) : '');
+  }
+  let poster = null;
+  if (!isStr) {
+    poster = itemObj.poster || itemObj.poster_url || (itemObj.poster_path ? (itemObj.poster_path.startsWith('http') ? itemObj.poster_path : `https://image.tmdb.org/t/p/w500${itemObj.poster_path}`) : null);
+  }
+  return {
+    id,
+    title,
+    type,
+    year,
+    poster,
+    rating: !isStr ? (itemObj.tmdb_rating || itemObj.rating || null) : null,
+    imdb_rating: !isStr ? (itemObj.imdb_rating || null) : null,
+    status: (!isStr && itemObj.status) ? itemObj.status : 'want_to_watch',
+    addedAt: (!isStr && itemObj.addedAt) ? itemObj.addedAt : Date.now(),
+  };
+}
+
+function addToWatchlist(itemObj) {
   if (!itemObj) return false;
-  const targetId = itemObj.id ? String(itemObj.id) : null;
-  const targetTitle = String(itemObj.title || itemObj).toLowerCase();
+  const entry = normalizeWatchlistEntry(itemObj);
+  if (!entry || !entry.title) return false;
+
+  if (isItemInWatchlist(entry)) {
+    return false;
+  }
+
+  state.watchlist.unshift(entry);
+  localStorage.setItem(STORAGE_KEYS.WATCHLIST, JSON.stringify(state.watchlist));
+  updateAllWatchlistButtons();
+  renderWatchlistItems();
+
+  showUndoToast(`Added to Watchlist - Undo`, () => {
+    removeFromWatchlist(entry, false);
+  });
+  return true;
+}
+
+function removeFromWatchlist(itemObj, showToast = true) {
+  if (!itemObj) return false;
+  const targetId = (itemObj.id != null) ? String(itemObj.id) : null;
+  const targetTitle = String(itemObj.title || itemObj).trim().toLowerCase();
 
   const idx = state.watchlist.findIndex((w) => {
     if (typeof w === 'object' && w !== null) {
-      if (targetId && String(w.id) === targetId) return true;
-      return String(w.title).toLowerCase() === targetTitle;
+      if (targetId && w.id != null && String(w.id) === targetId) return true;
+      if (w.title && String(w.title).trim().toLowerCase() === targetTitle) return true;
     }
-    return String(w).toLowerCase() === targetTitle;
+    return String(w).trim().toLowerCase() === targetTitle;
   });
 
-  let isSaved = false;
   if (idx >= 0) {
-    state.watchlist.splice(idx, 1);
-    isSaved = false;
-  } else {
-    state.watchlist.unshift({
-      id: itemObj.id || null,
-      title: itemObj.title || String(itemObj),
-      type: itemObj.type || itemObj.media_type || 'movie',
-      year: itemObj.year || '',
-      poster: itemObj.poster_url || itemObj.poster_path || itemObj.poster || null,
-      rating: itemObj.tmdb_rating || itemObj.rating || null,
-      imdb_rating: itemObj.imdb_rating || null,
-    });
-    isSaved = true;
-  }
+    const [removed] = state.watchlist.splice(idx, 1);
+    localStorage.setItem(STORAGE_KEYS.WATCHLIST, JSON.stringify(state.watchlist));
+    updateAllWatchlistButtons();
+    renderWatchlistItems();
 
-  localStorage.setItem(STORAGE_KEYS.WATCHLIST, JSON.stringify(state.watchlist));
-  updateWatchlistBadge();
-  renderWatchlistItems();
-  return isSaved;
+    if (showToast) {
+      const titleName = (typeof removed === 'object' && removed !== null) ? removed.title : removed;
+      showUndoToast(`Removed ${titleName} - Undo`, () => {
+        state.watchlist.splice(idx, 0, removed);
+        localStorage.setItem(STORAGE_KEYS.WATCHLIST, JSON.stringify(state.watchlist));
+        updateAllWatchlistButtons();
+        renderWatchlistItems();
+      });
+    }
+    return true;
+  }
+  return false;
+}
+
+function toggleWatchlist(itemObj) {
+  if (isItemInWatchlist(itemObj)) {
+    removeFromWatchlist(itemObj, true);
+    return false;
+  } else {
+    addToWatchlist(itemObj);
+    return true;
+  }
 }
 
 function isItemInWatchlist(itemObj) {
   if (!itemObj) return false;
-  const targetId = itemObj.id ? String(itemObj.id) : null;
-  const targetTitle = String(itemObj.title || itemObj).toLowerCase();
+  const targetId = (itemObj.id != null) ? String(itemObj.id) : null;
+  const targetTitle = String(itemObj.title || itemObj).trim().toLowerCase();
 
   return state.watchlist.some((w) => {
     if (typeof w === 'object' && w !== null) {
-      if (targetId && String(w.id) === targetId) return true;
-      return String(w.title).toLowerCase() === targetTitle;
+      if (targetId && w.id != null && String(w.id) === targetId) return true;
+      if (w.title && String(w.title).trim().toLowerCase() === targetTitle) return true;
     }
-    return String(w).toLowerCase() === targetTitle;
-  });
-}
-
-function renderWatchlistItems() {
-  if (state.watchlist.length === 0) {
-    dom.watchlistList.innerHTML = '<div class="watchlist-empty">Nothing saved yet. Add picks from Mood Picks or search!</div>';
-    return;
-  }
-
-  dom.watchlistList.innerHTML = state.watchlist
-    .map((item, index) => {
-      const isObj = typeof item === 'object' && item !== null;
-      const title = isObj ? item.title : item;
-      const year = isObj && item.year ? `(${item.year})` : '';
-      const poster = isObj && item.poster ? item.poster : null;
-      const rating = isObj && item.imdb_rating ? `<span class="star-icon-wrap">${renderIcon('star')}</span> ${item.imdb_rating}` : (isObj && item.rating ? `<span class="film-icon-wrap">${renderIcon('film')}</span> ${item.rating}` : '');
-
-      return `
-        <div class="watchlist-item-rich">
-          <div class="wl-left">
-            ${poster ? `<img class="wl-poster" src="${escapeHtml(poster)}" alt="" />` : `<div class="wl-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
-            <div class="wl-meta">
-              <span class="wl-title" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
-              <span class="wl-sub">${escapeHtml(year)} ${escapeHtml(rating)}</span>
-            </div>
-          </div>
-          <div class="wl-actions">
-            ${isObj && item.id ? `<button type="button" class="btn-wl-inspect" data-index="${index}" title="View Details">Details</button>` : ''}
-            <button type="button" class="btn-wl-remove" data-index="${index}" title="Remove" aria-label="Remove">${renderIcon('close')}</button>
-          </div>
-        </div>
-      `;
-    })
-    .join('');
-
-  dom.watchlistList.querySelectorAll('.btn-wl-remove').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      const idx = parseInt(e.currentTarget.dataset.index, 10);
-      state.watchlist.splice(idx, 1);
-      localStorage.setItem(STORAGE_KEYS.WATCHLIST, JSON.stringify(state.watchlist));
-      updateWatchlistBadge();
-      renderWatchlistItems();
-      if (typeof updateMoodCardWatchlistButtons === 'function') {
-        updateMoodCardWatchlistButtons();
-      }
-    });
-  });
-
-  dom.watchlistList.querySelectorAll('.btn-wl-inspect').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      const idx = parseInt(e.currentTarget.dataset.index, 10);
-      const item = state.watchlist[idx];
-      if (item && item.id) {
-        closeWatchlistModal();
-        openTitleInspector(item.id, item.type || 'movie');
-      }
-    });
+    return String(w).trim().toLowerCase() === targetTitle;
   });
 }
 
@@ -1812,6 +1846,302 @@ function updateWatchlistBadge() {
   if (dom.watchlistCount) {
     dom.watchlistCount.textContent = state.watchlist.length;
   }
+}
+
+function updateAllWatchlistButtons() {
+  updateWatchlistBadge();
+
+  // 1. Mood Cards
+  if (typeof updateMoodCardWatchlistButtons === 'function') {
+    updateMoodCardWatchlistButtons();
+  }
+
+  // 2. Title Inspector button
+  const inspectorWlBtn = document.getElementById('btn-inspector-watchlist');
+  if (inspectorWlBtn && state.activeTitleInspectorData) {
+    const inWl = isItemInWatchlist(state.activeTitleInspectorData);
+    inspectorWlBtn.classList.toggle('saved', inWl);
+    inspectorWlBtn.innerHTML = `${renderIcon(inWl ? 'check' : 'bookmark', 14)} <span>${inWl ? 'In Watchlist' : 'Add to Watchlist'}</span>`;
+  }
+
+  // 3. Bot bubble watchlist buttons
+  document.querySelectorAll('.btn-bubble-watchlist').forEach((btn) => {
+    const t = btn.dataset.title;
+    if (t) {
+      const inWl = isItemInWatchlist({ title: t });
+      btn.classList.toggle('saved', inWl);
+      btn.innerHTML = `${renderIcon(inWl ? 'check' : 'bookmark', 14)} <span>${inWl ? 'Saved' : 'Add to Watchlist'}</span>`;
+    }
+  });
+
+  // 4. Compare hero cards buttons
+  document.querySelectorAll('.btn-compare-watchlist').forEach((btn) => {
+    const t = btn.dataset.title;
+    if (t) {
+      const inWl = isItemInWatchlist({ title: t });
+      btn.classList.toggle('saved', inWl);
+      btn.innerHTML = `${renderIcon(inWl ? 'check' : 'bookmark', 12)} <span>${inWl ? 'Saved' : 'Watchlist'}</span>`;
+    }
+  });
+
+  // 5. Watchlist Search Dropdown buttons if active
+  if (dom.watchlistSearchResults) {
+    dom.watchlistSearchResults.querySelectorAll('.btn-wl-add-result').forEach((btn) => {
+      const id = btn.dataset.id;
+      const t = btn.dataset.title;
+      const inWl = isItemInWatchlist({ id, title: t });
+      btn.disabled = inWl;
+      btn.classList.toggle('saved', inWl);
+      btn.innerHTML = inWl ? `${renderIcon('check', 14)} Saved` : `${renderIcon('plus', 14)} Add`;
+    });
+  }
+}
+
+function handleWatchlistSearchInput(e) {
+  const query = (e.target.value || '').trim();
+  if (dom.watchlistSearchClear) {
+    dom.watchlistSearchClear.classList.toggle('hidden', query.length === 0);
+  }
+  clearTimeout(watchlistSearchDebounceTimer);
+  if (query.length < 2) {
+    if (dom.watchlistSearchResults) {
+      dom.watchlistSearchResults.innerHTML = '';
+      dom.watchlistSearchResults.classList.add('hidden');
+    }
+    watchlistLastResults = [];
+    if (dom.watchlistSearchSpinner) dom.watchlistSearchSpinner.classList.add('hidden');
+    return;
+  }
+
+  if (dom.watchlistSearchSpinner) dom.watchlistSearchSpinner.classList.remove('hidden');
+
+  watchlistSearchDebounceTimer = setTimeout(() => {
+    fetchWatchlistSearchResults(query);
+  }, 300);
+}
+
+async function fetchWatchlistSearchResults(query) {
+  try {
+    const res = await fetch(`/api/media/search?query=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    const results = (data && Array.isArray(data.results)) ? data.results : [];
+    watchlistLastResults = results;
+    renderWatchlistSearchResults(results, query);
+  } catch (err) {
+    console.warn('Watchlist search error:', err);
+    if (dom.watchlistSearchResults) {
+      dom.watchlistSearchResults.innerHTML = `
+        <div style="padding: 12px; font-size: 12.5px; color: var(--text-muted); text-align: center;">
+          Couldn't load search results. <button type="button" class="btn-text-retry" style="color:var(--accent-primary);text-decoration:underline;background:none;border:none;cursor:pointer;font-size:12.5px;">Retry</button>
+        </div>
+      `;
+      dom.watchlistSearchResults.classList.remove('hidden');
+      dom.watchlistSearchResults.querySelector('.btn-text-retry')?.addEventListener('click', () => {
+        fetchWatchlistSearchResults(query);
+      });
+    }
+  } finally {
+    if (dom.watchlistSearchSpinner) dom.watchlistSearchSpinner.classList.add('hidden');
+  }
+}
+
+function renderWatchlistSearchResults(results, query) {
+  if (!dom.watchlistSearchResults) return;
+  if (!results || results.length === 0) {
+    dom.watchlistSearchResults.innerHTML = `
+      <div style="padding: 14px; font-size: 12.5px; color: var(--text-muted); text-align: center;">
+        No results for "${escapeHtml(query)}"
+      </div>
+    `;
+    dom.watchlistSearchResults.classList.remove('hidden');
+    return;
+  }
+
+  dom.watchlistSearchResults.innerHTML = results.slice(0, 6).map((item, idx) => {
+    const isMovie = item.media_type === 'movie';
+    const typeBadge = isMovie ? '<span class="badge-type movie">Movie</span>' : '<span class="badge-type">TV Series</span>';
+    const poster = item.poster_path ? (item.poster_path.startsWith('http') ? item.poster_path : `https://image.tmdb.org/t/p/w500${item.poster_path}`) : '';
+    const year = item.year || '';
+    const isSaved = isItemInWatchlist(item);
+
+    return `
+      <div class="wl-search-result-item" data-index="${idx}">
+        ${poster ? `<img class="shield-result-thumb" src="${escapeHtml(poster)}" alt="" />` : `<div class="shield-result-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
+        <div class="shield-result-info">
+          <div class="shield-result-title">${escapeHtml(item.title)}</div>
+          <div class="shield-result-meta">
+            ${typeBadge}
+            ${year ? `<span>• ${escapeHtml(year)}</span>` : ''}
+          </div>
+        </div>
+        <button type="button" class="btn-wl-add-result ${isSaved ? 'saved' : ''}" data-index="${idx}" ${isSaved ? 'disabled' : ''} data-id="${item.id}" data-title="${escapeHtml(item.title)}">
+          ${isSaved ? renderIcon('check', 14) + ' Saved' : renderIcon('plus', 14) + ' Add'}
+        </button>
+      </div>
+    `;
+  }).join('');
+
+  dom.watchlistSearchResults.classList.remove('hidden');
+
+  dom.watchlistSearchResults.querySelectorAll('.wl-search-result-item').forEach((row) => {
+    row.addEventListener('click', () => {
+      const idx = parseInt(row.dataset.index, 10);
+      const item = results[idx];
+      if (!item || isItemInWatchlist(item)) return;
+      addToWatchlist(item);
+      const btn = row.querySelector('.btn-wl-add-result');
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add('saved');
+        btn.innerHTML = `${renderIcon('check', 14)} Saved`;
+      }
+    });
+  });
+}
+
+function handleWatchlistSearchKeydown(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (watchlistLastResults && watchlistLastResults.length > 0) {
+      const firstItem = watchlistLastResults[0];
+      if (!isItemInWatchlist(firstItem)) {
+        addToWatchlist(firstItem);
+        const firstBtn = dom.watchlistSearchResults?.querySelector('.btn-wl-add-result');
+        if (firstBtn) {
+          firstBtn.disabled = true;
+          firstBtn.classList.add('saved');
+          firstBtn.innerHTML = `${renderIcon('check', 14)} Saved`;
+        }
+      }
+    }
+  }
+}
+
+function clearWatchlistSearch() {
+  if (dom.watchlistAddInput) {
+    dom.watchlistAddInput.value = '';
+    dom.watchlistAddInput.focus();
+  }
+  if (dom.watchlistSearchClear) dom.watchlistSearchClear.classList.add('hidden');
+  if (dom.watchlistSearchResults) {
+    dom.watchlistSearchResults.innerHTML = '';
+    dom.watchlistSearchResults.classList.add('hidden');
+  }
+  watchlistLastResults = [];
+}
+
+function renderWatchlistItems() {
+  if (!dom.watchlistList) return;
+
+  let items = [...state.watchlist];
+
+  // Apply Filter Tab
+  if (watchlistFilter === 'movie') {
+    items = items.filter((i) => (typeof i === 'object' && i !== null ? (i.type === 'movie' || i.media_type === 'movie') : true));
+  } else if (watchlistFilter === 'tv') {
+    items = items.filter((i) => (typeof i === 'object' && i !== null ? (i.type === 'tv' || i.media_type === 'tv') : false));
+  } else if (watchlistFilter === 'watched') {
+    items = items.filter((i) => (typeof i === 'object' && i !== null ? i.status === 'watched' : false));
+  }
+
+  // Apply Sort
+  if (watchlistSort === 'title') {
+    items.sort((a, b) => {
+      const tA = (typeof a === 'object' && a !== null ? a.title : a) || '';
+      const tB = (typeof b === 'object' && b !== null ? b.title : b) || '';
+      return tA.localeCompare(tB);
+    });
+  } else {
+    // 'recent': newest addedAt first
+    items.sort((a, b) => {
+      const timeA = (typeof a === 'object' && a !== null ? (a.addedAt || 0) : 0);
+      const timeB = (typeof b === 'object' && b !== null ? (b.addedAt || 0) : 0);
+      return timeB - timeA;
+    });
+  }
+
+  if (items.length === 0) {
+    const emptyMsg = state.watchlist.length === 0
+      ? 'Nothing saved yet. Search above to add movies and series!'
+      : `No titles match the "${watchlistFilter === 'tv' ? 'Series' : (watchlistFilter === 'movie' ? 'Movies' : (watchlistFilter === 'watched' ? 'Watched' : watchlistFilter))}" filter.`;
+    dom.watchlistList.innerHTML = `<div class="watchlist-empty">${emptyMsg}</div>`;
+    return;
+  }
+
+  dom.watchlistList.innerHTML = items.map((item) => {
+    const isObj = typeof item === 'object' && item !== null;
+    const id = isObj ? item.id : null;
+    const title = isObj ? item.title : item;
+    const year = isObj && item.year ? item.year : '';
+    const type = isObj && (item.type === 'tv' || item.media_type === 'tv') ? 'tv' : 'movie';
+    const poster = isObj && item.poster ? item.poster : null;
+    const status = isObj && item.status ? item.status : 'want_to_watch';
+    const rating = isObj && item.imdb_rating ? `<span class="star-icon-wrap">${renderIcon('star', 12)}</span> ${item.imdb_rating}` : (isObj && item.rating ? `<span class="film-icon-wrap">${renderIcon('film', 12)}</span> ${item.rating}` : '');
+
+    return `
+      <div class="watchlist-item-rich" data-title="${escapeHtml(title)}">
+        <div class="wl-left">
+          ${poster ? `<img class="wl-poster" src="${escapeHtml(poster)}" alt="" />` : `<div class="wl-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
+          <div class="wl-meta">
+            <div class="wl-title-row">
+              <span class="wl-title" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+              <span class="badge-type ${type}">${type === 'movie' ? 'Movie' : 'TV Series'}</span>
+            </div>
+            <div class="wl-sub">
+              ${year ? `<span>${escapeHtml(year)}</span>` : ''}
+              ${rating ? `<span>• ${rating}</span>` : ''}
+            </div>
+          </div>
+        </div>
+        <div class="wl-actions">
+          <select class="wl-status-select" data-title="${escapeHtml(title)}" aria-label="Watch status">
+            <option value="want_to_watch" ${status === 'want_to_watch' ? 'selected' : ''}>Want to watch</option>
+            <option value="watching" ${status === 'watching' ? 'selected' : ''}>Watching</option>
+            <option value="watched" ${status === 'watched' ? 'selected' : ''}>Watched</option>
+          </select>
+          ${id ? `<button type="button" class="btn-wl-inspect" data-id="${id}" data-type="${type}" title="View Details in Title Inspector">Details</button>` : ''}
+          <button type="button" class="btn-wl-remove" data-title="${escapeHtml(title)}" title="Remove from Watchlist" aria-label="Remove">${renderIcon('close', 16)}</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Bind status switch
+  dom.watchlistList.querySelectorAll('.wl-status-select').forEach((sel) => {
+    sel.addEventListener('change', (e) => {
+      const t = e.target.dataset.title;
+      const newStatus = e.target.value;
+      const target = state.watchlist.find((w) => (typeof w === 'object' && w !== null ? w.title === t : w === t));
+      if (target && typeof target === 'object') {
+        target.status = newStatus;
+        localStorage.setItem(STORAGE_KEYS.WATCHLIST, JSON.stringify(state.watchlist));
+        if (watchlistFilter === 'watched') renderWatchlistItems();
+      }
+    });
+  });
+
+  // Bind Inspect button
+  dom.watchlistList.querySelectorAll('.btn-wl-inspect').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const type = btn.dataset.type || 'movie';
+      if (id) {
+        closeWatchlistModal();
+        openTitleInspector(id, type, true);
+      }
+    });
+  });
+
+  // Bind Remove button with undo
+  dom.watchlistList.querySelectorAll('.btn-wl-remove').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const t = btn.dataset.title;
+      const target = state.watchlist.find((w) => (typeof w === 'object' && w !== null ? w.title === t : w === t));
+      if (target) {
+        removeFromWatchlist(target, true);
+      }
+    });
+  });
 }
 
 // ========================================================
@@ -1924,12 +2254,24 @@ async function prepareTitleInspectorContent(mediaDataOrId, type = 'movie') {
         </div>
       ` : ''}
 
-      ${data.trailer_url ? `
-        <a href="${escapeHtml(data.trailer_url)}" target="_blank" rel="noopener noreferrer" class="btn-trailer">
-          ${renderIcon('play', 14)} Watch Trailer
-        </a>
-      ` : ''}
+      <div class="inspector-actions-row">
+        <button type="button" class="btn-inspector-watchlist ${isItemInWatchlist(data) ? 'saved' : ''}" id="btn-inspector-watchlist">
+          ${isItemInWatchlist(data) ? `${renderIcon('check', 14)} <span>In Watchlist</span>` : `${renderIcon('bookmark', 14)} <span>Add to Watchlist</span>`}
+        </button>
+        ${data.trailer_url ? `
+          <a href="${escapeHtml(data.trailer_url)}" target="_blank" rel="noopener noreferrer" class="btn-trailer">
+            ${renderIcon('play', 14)} Watch Trailer
+          </a>
+        ` : ''}
+      </div>
     `;
+
+    const btnInspectorWl = cardActiveEl.querySelector('#btn-inspector-watchlist');
+    if (btnInspectorWl) {
+      btnInspectorWl.addEventListener('click', () => {
+        toggleWatchlist(data);
+      });
+    }
   }
 
   return data;
@@ -3007,15 +3349,40 @@ function bindEvents() {
   });
   dom.btnCloseWatchlistModal.addEventListener('click', closeWatchlistModal);
 
-  dom.watchlistForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const val = dom.watchlistAddInput.value.trim();
-    if (!val) return;
-    state.watchlist.unshift(val);
-    localStorage.setItem(STORAGE_KEYS.WATCHLIST, JSON.stringify(state.watchlist));
-    dom.watchlistAddInput.value = '';
-    updateWatchlistBadge();
-    renderWatchlistItems();
+  // Watchlist Search & Autocomplete
+  if (dom.watchlistAddInput) {
+    dom.watchlistAddInput.addEventListener('input', handleWatchlistSearchInput);
+    dom.watchlistAddInput.addEventListener('keydown', handleWatchlistSearchKeydown);
+  }
+  if (dom.watchlistSearchClear) {
+    dom.watchlistSearchClear.addEventListener('click', clearWatchlistSearch);
+  }
+
+  // Watchlist Filter tabs
+  if (dom.watchlistFilterTabs) {
+    dom.watchlistFilterTabs.addEventListener('click', (e) => {
+      const tab = e.target.closest('.wl-tab-btn');
+      if (!tab) return;
+      dom.watchlistFilterTabs.querySelectorAll('.wl-tab-btn').forEach((b) => b.classList.remove('active'));
+      tab.classList.add('active');
+      watchlistFilter = tab.dataset.filter || 'all';
+      renderWatchlistItems();
+    });
+  }
+
+  // Watchlist Sort select
+  if (dom.watchlistSortSelect) {
+    dom.watchlistSortSelect.addEventListener('change', (e) => {
+      watchlistSort = e.target.value || 'recent';
+      renderWatchlistItems();
+    });
+  }
+
+  // Close search dropdown on outside click
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#watchlist-search-wrapper')) {
+      if (dom.watchlistSearchResults) dom.watchlistSearchResults.classList.add('hidden');
+    }
   });
 
   // Mobile drawer controls
@@ -4424,6 +4791,8 @@ async function launchComparison(titleAObj = null, titleBObj = null) {
     // Update heroes with fully resolved metadata & high-res posters
     const heroesContainer = document.getElementById('compare-heroes-container');
     if (heroesContainer) {
+      const inWlA = isItemInWatchlist(resolvedA);
+      const inWlB = isItemInWatchlist(resolvedB);
       heroesContainer.innerHTML = `
         <div class="compare-hero-card">
           ${resolvedA.poster_url ? `<img class="hero-poster" src="${escapeHtml(resolvedA.poster_url)}" alt="${escapeHtml(resolvedA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
@@ -4431,6 +4800,9 @@ async function launchComparison(titleAObj = null, titleBObj = null) {
             <span class="picker-badge">A</span>
             <h3 class="hero-title">${escapeHtml(resolvedA.title)}</h3>
             <span class="hero-year-badge">${escapeHtml(resolvedA.year || '')} • ${(resolvedA.type || 'movie').toUpperCase()}</span>
+            <button type="button" class="btn-compare-watchlist ${inWlA ? 'saved' : ''}" data-side="a" data-title="${escapeHtml(resolvedA.title)}">
+              ${renderIcon(inWlA ? 'check' : 'bookmark', 12)} <span>${inWlA ? 'Saved' : 'Watchlist'}</span>
+            </button>
           </div>
         </div>
         <div class="compare-hero-vs-badge">
@@ -4442,9 +4814,21 @@ async function launchComparison(titleAObj = null, titleBObj = null) {
             <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">B</span>
             <h3 class="hero-title">${escapeHtml(resolvedB.title)}</h3>
             <span class="hero-year-badge">${escapeHtml(resolvedB.year || '')} • ${(resolvedB.type || 'movie').toUpperCase()}</span>
+            <button type="button" class="btn-compare-watchlist ${inWlB ? 'saved' : ''}" data-side="b" data-title="${escapeHtml(resolvedB.title)}">
+              ${renderIcon(inWlB ? 'check' : 'bookmark', 12)} <span>${inWlB ? 'Saved' : 'Watchlist'}</span>
+            </button>
           </div>
         </div>
       `;
+
+      heroesContainer.querySelectorAll('.btn-compare-watchlist').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const side = btn.dataset.side;
+          const target = side === 'a' ? resolvedA : resolvedB;
+          if (target) toggleWatchlist(target);
+        });
+      });
     }
 
     // Render table immediately (does not wait for verdict!)
@@ -4500,6 +4884,8 @@ function swapCompareSides() {
 
   const heroesContainer = document.getElementById('compare-heroes-container');
   if (heroesContainer) {
+    const inWlA = isItemInWatchlist(itemB);
+    const inWlB = isItemInWatchlist(itemA);
     heroesContainer.innerHTML = `
       <div class="compare-hero-card">
         ${itemB.poster_url ? `<img class="hero-poster" src="${escapeHtml(itemB.poster_url)}" alt="${escapeHtml(itemB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
@@ -4507,6 +4893,9 @@ function swapCompareSides() {
           <span class="picker-badge">A</span>
           <h3 class="hero-title">${escapeHtml(itemB.title)}</h3>
           <span class="hero-year-badge">${escapeHtml(itemB.year || '')} • ${(itemB.type || 'movie').toUpperCase()}</span>
+          <button type="button" class="btn-compare-watchlist ${inWlA ? 'saved' : ''}" data-side="a" data-title="${escapeHtml(itemB.title)}">
+            ${renderIcon(inWlA ? 'check' : 'bookmark', 12)} <span>${inWlA ? 'Saved' : 'Watchlist'}</span>
+          </button>
         </div>
       </div>
       <div class="compare-hero-vs-badge">
@@ -4518,9 +4907,21 @@ function swapCompareSides() {
           <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">B</span>
           <h3 class="hero-title">${escapeHtml(itemA.title)}</h3>
           <span class="hero-year-badge">${escapeHtml(itemA.year || '')} • ${(itemA.type || 'movie').toUpperCase()}</span>
+          <button type="button" class="btn-compare-watchlist ${inWlB ? 'saved' : ''}" data-side="b" data-title="${escapeHtml(itemA.title)}">
+            ${renderIcon(inWlB ? 'check' : 'bookmark', 12)} <span>${inWlB ? 'Saved' : 'Watchlist'}</span>
+          </button>
         </div>
       </div>
     `;
+
+    heroesContainer.querySelectorAll('.btn-compare-watchlist').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const side = btn.dataset.side;
+        const target = side === 'a' ? itemB : itemA;
+        if (target) toggleWatchlist(target);
+      });
+    });
   }
 
   renderComparisonTable(itemB, itemA);
