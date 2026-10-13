@@ -25,6 +25,8 @@ const STORAGE_KEYS = {
   WATCHLIST: 'kinora_watchlist_v1',
   THEME: 'kinora_theme_v1',
   MODE: 'kinora_mode_v1',
+  INSPECTOR_OPEN: 'kinora_inspector_open_v1',
+  INSPECTOR_MANUAL_CLOSED: 'kinora_inspector_manual_closed_v1',
 };
 
 // ========================================================
@@ -348,7 +350,10 @@ const ICONS = {
   close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
   check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
   plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
-  arrowRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`
+  arrowRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`,
+  panelRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></svg>`,
+  shieldPlus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="14"/><line x1="9" y1="11" x2="15" y2="11"/></svg>`,
+  play: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
 };
 
 const EMOJI_MAP = {
@@ -399,12 +404,32 @@ const EMOJI_MAP = {
   '➔': 'arrowRight'
 };
 
-function renderIcon(keyOrEmoji) {
+function renderIcon(keyOrEmoji, size = 20, extraClass = '') {
   if (!keyOrEmoji) return '';
-  if (typeof keyOrEmoji === 'string' && keyOrEmoji.trim().startsWith('<svg')) return keyOrEmoji;
-  if (ICONS[keyOrEmoji]) return ICONS[keyOrEmoji];
-  if (EMOJI_MAP[keyOrEmoji] && ICONS[EMOJI_MAP[keyOrEmoji]]) return ICONS[EMOJI_MAP[keyOrEmoji]];
-  return ICONS.general;
+  let svg = '';
+  if (typeof keyOrEmoji === 'string' && keyOrEmoji.trim().startsWith('<svg')) {
+    svg = keyOrEmoji.trim();
+  } else if (ICONS[keyOrEmoji]) {
+    svg = ICONS[keyOrEmoji];
+  } else if (EMOJI_MAP[keyOrEmoji] && ICONS[EMOJI_MAP[keyOrEmoji]]) {
+    svg = ICONS[EMOJI_MAP[keyOrEmoji]];
+  } else {
+    svg = ICONS.general;
+  }
+
+  // Ensure explicit width, height, stroke-width="1.75", and class="icon ..."
+  svg = svg.replace(/<svg\b([^>]*)>/i, (match, attrs) => {
+    let cleaned = attrs
+      .replace(/\s*width="[^"]*"/gi, '')
+      .replace(/\s*height="[^"]*"/gi, '')
+      .replace(/\s*stroke-width="[^"]*"/gi, '')
+      .replace(/\s*class="[^"]*"/gi, '');
+    const isFilled = attrs.includes('fill="currentColor"') && !attrs.includes('stroke=');
+    const sw = isFilled ? '' : 'stroke-width="1.75"';
+    const classes = ('icon ' + (extraClass || '')).trim();
+    return `<svg width="${size}" height="${size}" ${sw} class="${classes}" ${cleaned}>`;
+  });
+  return svg;
 }
 
 // ========================================================
@@ -511,6 +536,8 @@ const dom = {
   topbarShieldsBar: document.getElementById('topbar-shields-bar'),
   topbarChipsList: document.getElementById('topbar-chips-list'),
   btnAddShieldTopbar: document.getElementById('btn-add-shield-topbar'),
+  btnMobileAddShield: document.getElementById('btn-mobile-add-shield'),
+  btnToggleInspector: document.getElementById('btn-toggle-inspector'),
   shieldOverflowWrapper: document.getElementById('shield-overflow-wrapper'),
   btnOverflowChip: document.getElementById('btn-overflow-chip'),
   shieldOverflowDropdown: document.getElementById('shield-overflow-dropdown'),
@@ -645,7 +672,6 @@ const MODE_PLACEHOLDERS = {
     "I'm on season 1 episode 3...",
     "Recap what I've watched...",
     'Who is this character?',
-    'Explain this episode...',
   ],
   'mood-picks': [
     'Something light after a bad day...',
@@ -665,11 +691,9 @@ const MODE_PLACEHOLDERS = {
   compare: [
     'Breaking Bad vs Better Call Saul',
     'Dark vs Stranger Things',
-    'Which is better, X or Y?',
   ],
   'for-you': [
     'What should I watch next?',
-    'Show my taste profile...',
     'Recommend based on my likes',
   ],
 };
@@ -824,6 +848,12 @@ function init() {
   renderActiveSession();
   bindEvents();
   initRotatingPlaceholder();
+
+  // Restore desktop inspector state
+  if (window.innerWidth >= 1200 && localStorage.getItem(STORAGE_KEYS.INSPECTOR_OPEN) === 'true') {
+    dom.inspectorPanel?.classList.remove('collapsed');
+    dom.btnToggleInspector?.classList.add('active');
+  }
 }
 
 function loadFromStorage() {
@@ -1183,8 +1213,8 @@ function addBubbleActions(bubble, content, titleData = null) {
   if (tData && tData.title) {
     const inspectBtn = document.createElement('button');
     inspectBtn.className = 'btn-bubble-action btn-bubble-inspect';
-    inspectBtn.innerHTML = `${renderIcon('film')} <span>${escapeHtml(tData.title)} Details</span>`;
-    inspectBtn.title = 'View details in Title Inspector';
+    inspectBtn.innerHTML = `${renderIcon('film', 16)} <span>${escapeHtml(tData.title)} - Details</span>`;
+    inspectBtn.title = `View ${escapeHtml(tData.title)} details in Title Inspector`;
     inspectBtn.addEventListener('click', () => {
       openTitleInspector(tData, tData.media_type || tData.type || 'movie', true);
     });
@@ -1896,7 +1926,7 @@ async function prepareTitleInspectorContent(mediaDataOrId, type = 'movie') {
 
       ${data.trailer_url ? `
         <a href="${escapeHtml(data.trailer_url)}" target="_blank" rel="noopener noreferrer" class="btn-trailer">
-          ▶ Watch Trailer
+          ${renderIcon('play', 14)} Watch Trailer
         </a>
       ` : ''}
     `;
@@ -1909,9 +1939,19 @@ async function openTitleInspector(mediaDataOrId, type = 'movie', forceOpen = fal
   if (!dom.inspectorPanel) return;
 
   const isMobile = window.innerWidth <= 768;
+  const isManualClosed = localStorage.getItem(STORAGE_KEYS.INSPECTOR_MANUAL_CLOSED) === 'true';
 
-  // On mobile: if NOT explicitly requested by user tap (e.g. background stream SSE event),
-  // prepare the data in the background and show the trigger pill, but DO NOT open the panel over the response!
+  // If user closed inspector manually, do NOT auto-open on streamed / automatic title detections
+  if (!forceOpen && isManualClosed) {
+    const data = await prepareTitleInspectorContent(mediaDataOrId, type);
+    if (isMobile && data && data.title) {
+      showMobileInspectorPill(data);
+    }
+    return;
+  }
+
+  // On mobile: if NOT explicitly requested by user tap (forceOpen),
+  // prepare data in background and show floating trigger pill
   if (isMobile && !forceOpen) {
     const data = await prepareTitleInspectorContent(mediaDataOrId, type);
     if (data && data.title) {
@@ -1920,9 +1960,17 @@ async function openTitleInspector(mediaDataOrId, type = 'movie', forceOpen = fal
     return;
   }
 
-  // Open the panel
+  // User explicitly opened it or auto-opened
+  if (forceOpen) {
+    localStorage.removeItem(STORAGE_KEYS.INSPECTOR_MANUAL_CLOSED);
+    localStorage.setItem(STORAGE_KEYS.INSPECTOR_OPEN, 'true');
+  } else {
+    localStorage.setItem(STORAGE_KEYS.INSPECTOR_OPEN, 'true');
+  }
+
   dom.inspectorPanel.classList.remove('collapsed');
-  dom.inspectorPanel.style.transform = 'translateX(0)';
+  dom.inspectorPanel.style.transform = '';
+  dom.btnToggleInspector?.classList.add('active');
 
   if (isMobile && dom.inspectorOverlay) {
     dom.inspectorOverlay.classList.add('active');
@@ -1932,40 +1980,39 @@ async function openTitleInspector(mediaDataOrId, type = 'movie', forceOpen = fal
   await prepareTitleInspectorContent(mediaDataOrId, type);
 }
 
-function closeInspectorPanel(animated = true) {
+function closeInspectorPanel(userInitiated = true) {
   if (!dom.inspectorPanel) return;
 
-  if (animated) {
-    dom.inspectorPanel.style.transition = 'transform 0.26s cubic-bezier(0.16, 1, 0.3, 1)';
-    dom.inspectorPanel.style.transform = 'translateX(100%)';
-    if (dom.inspectorOverlay) {
-      dom.inspectorOverlay.style.transition = 'opacity 0.26s ease';
-      dom.inspectorOverlay.classList.remove('active');
-    }
-    setTimeout(() => {
-      dom.inspectorPanel.classList.add('collapsed');
-      dom.inspectorPanel.style.transform = '';
-      dom.inspectorPanel.style.transition = '';
-      if (dom.inspectorOverlay) {
-        dom.inspectorOverlay.style.opacity = '';
-        dom.inspectorOverlay.style.transition = '';
-      }
-      if (window.innerWidth <= 768 && state.activeTitleInspectorData) {
-        showMobileInspectorPill(state.activeTitleInspectorData);
-      }
-    }, 270);
+  if (userInitiated) {
+    localStorage.setItem(STORAGE_KEYS.INSPECTOR_MANUAL_CLOSED, 'true');
+    localStorage.setItem(STORAGE_KEYS.INSPECTOR_OPEN, 'false');
+  }
+
+  dom.inspectorPanel.classList.add('collapsed');
+  dom.inspectorPanel.style.transform = '';
+  dom.btnToggleInspector?.classList.remove('active');
+
+  if (dom.inspectorOverlay) {
+    dom.inspectorOverlay.classList.remove('active');
+    dom.inspectorOverlay.style.opacity = '';
+  }
+
+  if (window.innerWidth <= 768 && state.activeTitleInspectorData) {
+    showMobileInspectorPill(state.activeTitleInspectorData);
+  }
+}
+
+function toggleTitleInspector() {
+  if (!dom.inspectorPanel) return;
+  const isCollapsed = dom.inspectorPanel.classList.contains('collapsed');
+  if (isCollapsed) {
+    openTitleInspector(
+      state.activeTitleInspectorData,
+      state.activeTitleInspectorData?.media_type || state.activeTitleInspectorData?.type || 'movie',
+      true
+    );
   } else {
-    dom.inspectorPanel.classList.add('collapsed');
-    dom.inspectorPanel.style.transform = '';
-    dom.inspectorPanel.style.transition = '';
-    if (dom.inspectorOverlay) {
-      dom.inspectorOverlay.classList.remove('active');
-      dom.inspectorOverlay.style.opacity = '';
-      dom.inspectorOverlay.style.transition = '';
-    }
-    if (window.innerWidth <= 768 && state.activeTitleInspectorData) {
-      showMobileInspectorPill(state.activeTitleInspectorData);
-    }
+    closeInspectorPanel(true);
   }
 }
 
@@ -2988,6 +3035,18 @@ function bindEvents() {
     });
   }
   setupInspectorTouchGestures();
+
+  // Inspector toggle in topbar
+  if (dom.btnToggleInspector) {
+    dom.btnToggleInspector.addEventListener('click', toggleTitleInspector);
+  }
+
+  // Mobile + Add Shield button in topbar
+  if (dom.btnMobileAddShield) {
+    dom.btnMobileAddShield.addEventListener('click', () => {
+      if (!state.isGenerating) openSpoilerModal('add');
+    });
+  }
 
   // Theme toggle
   dom.btnToggleTheme.addEventListener('click', toggleTheme);
@@ -4038,7 +4097,7 @@ function renderInitialComparisonSkeleton(itemA, itemB) {
       <div class="compare-hero-card">
         ${posterA ? `<img class="hero-poster" src="${escapeHtml(posterA)}" alt="${escapeHtml(itemA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
         <div class="hero-info">
-          <span class="picker-badge">Title A</span>
+          <span class="picker-badge">A</span>
           <h3 class="hero-title">${escapeHtml(itemA.title)}</h3>
           <span class="hero-year-badge">${escapeHtml(yearA)} • ${typeA}</span>
         </div>
@@ -4049,7 +4108,7 @@ function renderInitialComparisonSkeleton(itemA, itemB) {
       <div class="compare-hero-card">
         ${posterB ? `<img class="hero-poster" src="${escapeHtml(posterB)}" alt="${escapeHtml(itemB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
         <div class="hero-info">
-          <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">Title B</span>
+          <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">B</span>
           <h3 class="hero-title">${escapeHtml(itemB.title)}</h3>
           <span class="hero-year-badge">${escapeHtml(yearB)} • ${typeB}</span>
         </div>
@@ -4071,7 +4130,7 @@ function renderInitialComparisonSkeleton(itemA, itemB) {
   if (dataTable) dataTable.classList.remove('hidden');
 
   if (tbody) {
-    const metrics = ['IMDb Rating', 'IMDb Votes', 'TMDB Rating', 'Runtime / Seasons', 'Genres', 'Status', 'Watch in India'];
+    const metrics = ['IMDb', 'Votes', 'TMDB', 'Runtime', 'Genres', 'Status', 'Where to watch'];
     tbody.innerHTML = metrics
       .map(
         () => `
@@ -4129,22 +4188,22 @@ function renderComparisonTable(itemA, itemB) {
 
     tbody.innerHTML = `
       <tr>
-        <td class="col-metric">IMDb Rating</td>
-        <td><span class="${imdbA > imdbB ? 'better-val' : ''}">⭐ ${itemA.imdb_rating || 'N/A'}</span></td>
-        <td><span class="${imdbB > imdbA ? 'better-val' : ''}">⭐ ${itemB.imdb_rating || 'N/A'}</span></td>
+        <td class="col-metric">IMDb</td>
+        <td><span class="${imdbA > imdbB ? 'better-val' : ''}"><span class="star-icon-wrap">${renderIcon('star', 14)}</span> ${itemA.imdb_rating || 'N/A'}</span></td>
+        <td><span class="${imdbB > imdbA ? 'better-val' : ''}"><span class="star-icon-wrap">${renderIcon('star', 14)}</span> ${itemB.imdb_rating || 'N/A'}</span></td>
       </tr>
       <tr>
-        <td class="col-metric">IMDb Votes</td>
+        <td class="col-metric">Votes</td>
         <td><span class="${votesA > votesB ? 'better-val' : ''}">${itemA.imdb_votes || 'N/A'}</span></td>
         <td><span class="${votesB > votesA ? 'better-val' : ''}">${itemB.imdb_votes || 'N/A'}</span></td>
       </tr>
       <tr>
-        <td class="col-metric">TMDB Rating</td>
-        <td><span class="${tmdbA > tmdbB ? 'better-val' : ''}"><span class="film-icon-wrap">${renderIcon('film')}</span> ${itemA.tmdb_rating ? itemA.tmdb_rating.toFixed(1) : 'N/A'}</span></td>
-        <td><span class="${tmdbB > tmdbA ? 'better-val' : ''}"><span class="film-icon-wrap">${renderIcon('film')}</span> ${itemB.tmdb_rating ? itemB.tmdb_rating.toFixed(1) : 'N/A'}</span></td>
+        <td class="col-metric">TMDB</td>
+        <td><span class="${tmdbA > tmdbB ? 'better-val' : ''}"><span class="film-icon-wrap">${renderIcon('film', 14)}</span> ${itemA.tmdb_rating ? itemA.tmdb_rating.toFixed(1) : 'N/A'}</span></td>
+        <td><span class="${tmdbB > tmdbA ? 'better-val' : ''}"><span class="film-icon-wrap">${renderIcon('film', 14)}</span> ${itemB.tmdb_rating ? itemB.tmdb_rating.toFixed(1) : 'N/A'}</span></td>
       </tr>
       <tr>
-        <td class="col-metric">Runtime / Seasons</td>
+        <td class="col-metric">Runtime</td>
         <td>${escapeHtml(itemA.duration || 'N/A')}</td>
         <td>${escapeHtml(itemB.duration || 'N/A')}</td>
       </tr>
@@ -4159,7 +4218,7 @@ function renderComparisonTable(itemA, itemB) {
         <td>${escapeHtml(itemB.status || 'Released')}</td>
       </tr>
       <tr>
-        <td class="col-metric">Watch in India</td>
+        <td class="col-metric">Where to watch</td>
         <td><span style="font-size:12.5px;color:var(--text-secondary);">${escapeHtml(streamA)}</span></td>
         <td><span style="font-size:12.5px;color:var(--text-secondary);">${escapeHtml(streamB)}</span></td>
       </tr>
@@ -4369,7 +4428,7 @@ async function launchComparison(titleAObj = null, titleBObj = null) {
         <div class="compare-hero-card">
           ${resolvedA.poster_url ? `<img class="hero-poster" src="${escapeHtml(resolvedA.poster_url)}" alt="${escapeHtml(resolvedA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
           <div class="hero-info">
-            <span class="picker-badge">Title A</span>
+            <span class="picker-badge">A</span>
             <h3 class="hero-title">${escapeHtml(resolvedA.title)}</h3>
             <span class="hero-year-badge">${escapeHtml(resolvedA.year || '')} • ${(resolvedA.type || 'movie').toUpperCase()}</span>
           </div>
@@ -4380,7 +4439,7 @@ async function launchComparison(titleAObj = null, titleBObj = null) {
         <div class="compare-hero-card">
           ${resolvedB.poster_url ? `<img class="hero-poster" src="${escapeHtml(resolvedB.poster_url)}" alt="${escapeHtml(resolvedB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
           <div class="hero-info">
-            <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">Title B</span>
+            <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">B</span>
             <h3 class="hero-title">${escapeHtml(resolvedB.title)}</h3>
             <span class="hero-year-badge">${escapeHtml(resolvedB.year || '')} • ${(resolvedB.type || 'movie').toUpperCase()}</span>
           </div>
@@ -4445,7 +4504,7 @@ function swapCompareSides() {
       <div class="compare-hero-card">
         ${itemB.poster_url ? `<img class="hero-poster" src="${escapeHtml(itemB.poster_url)}" alt="${escapeHtml(itemB.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
         <div class="hero-info">
-          <span class="picker-badge">Title A</span>
+          <span class="picker-badge">A</span>
           <h3 class="hero-title">${escapeHtml(itemB.title)}</h3>
           <span class="hero-year-badge">${escapeHtml(itemB.year || '')} • ${(itemB.type || 'movie').toUpperCase()}</span>
         </div>
@@ -4456,7 +4515,7 @@ function swapCompareSides() {
       <div class="compare-hero-card">
         ${itemA.poster_url ? `<img class="hero-poster" src="${escapeHtml(itemA.poster_url)}" alt="${escapeHtml(itemA.title)}" />` : `<div class="hero-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">${renderIcon('film')}</div>`}
         <div class="hero-info">
-          <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">Title B</span>
+          <span class="picker-badge" style="color:#EC4899;background:rgba(236,72,153,0.1)">B</span>
           <h3 class="hero-title">${escapeHtml(itemA.title)}</h3>
           <span class="hero-year-badge">${escapeHtml(itemA.year || '')} • ${(itemA.type || 'movie').toUpperCase()}</span>
         </div>
