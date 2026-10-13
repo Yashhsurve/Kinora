@@ -10,9 +10,16 @@
   --bg-input: #1A1A24;
   --bg-glass: rgba(26, 26, 36, 0.95);
 
+  /* Hover & Interaction Tokens */
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-hover-card: rgba(139, 92, 246, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.18);
+  --bg-thumb: #252535;
+
   /* Single Sparingly-Used Accent Gradient (Violet to Pink) */
   --accent-primary: #8B5CF6;
   --accent-secondary: #EC4899;
+  --accent-hover: #7C3AED;
   --accent-gradient: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
 
   /* Contrast & Text */
@@ -20,10 +27,38 @@
   --text-secondary: #94A3B8;
   --text-muted: #64748B;
 
+  /* Status Tokens */
+  --color-success: #10B981;
+  --color-success-bg: rgba(16, 185, 129, 0.12);
+  --color-warning: #F59E0B;
+  --color-warning-bg: rgba(245, 158, 11, 0.14);
+  --color-danger: #EF4444;
+  --color-danger-bg: rgba(239, 68, 68, 0.12);
+  --color-info: #01B4E4;
+  --color-star: #EAB308;
+
+  /* Badges & Tags */
+  --badge-movie-text: #F472B6;
+  --badge-movie-bg: rgba(236, 72, 153, 0.18);
+  --badge-tv-text: #C084FC;
+  --badge-tv-bg: rgba(139, 92, 246, 0.18);
+  --badge-imdb-text: #F5C518;
+  --badge-imdb-bg: rgba(245, 197, 24, 0.15);
+
+  /* Toasts */
+  --toast-bg: #1A1A24;
+  --toast-text: #FFFFFF;
+  --toast-border: rgba(255, 255, 255, 0.15);
+  --toast-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+
+  /* Code & Quotes */
+  --code-bg: rgba(0, 0, 0, 0.35);
+
   /* Borders & Shadows */
   --border-subtle: rgba(255, 255, 255, 0.07);
   --border-active: rgba(139, 92, 246, 0.5);
   --shadow-subtle: 0 4px 20px rgba(0, 0, 0, 0.25);
+  --shadow-dropdown: 0 12px 30px -4px rgba(0, 0, 0, 0.5), 0 6px 12px -4px rgba(0, 0, 0, 0.3);
 
   /* Typography */
   --font-display: 'Space Grotesk', -apple-system, sans-serif;
@@ -58,13 +93,55 @@
   --bg-input: #FFFFFF;
   --bg-glass: rgba(255, 255, 255, 0.95);
 
+  /* Hover & Interaction Tokens */
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-hover-card: rgba(124, 58, 237, 0.07);
+  --border-hover: rgba(0, 0, 0, 0.16);
+  --bg-thumb: #E2E8F0;
+
+  /* Single Sparingly-Used Accent Gradient (Deepened for WCAG AA >= 4.5:1 text contrast) */
+  --accent-primary: #7C3AED;
+  --accent-secondary: #DB2777;
+  --accent-hover: #6D28D9;
+  --accent-gradient: linear-gradient(135deg, #7C3AED 0%, #DB2777 100%);
+
+  /* Contrast & Text */
   --text-primary: #0F172A;
   --text-secondary: #475569;
   --text-muted: #64748B;
 
+  /* Status Tokens */
+  --color-success: #047857;
+  --color-success-bg: rgba(4, 120, 87, 0.1);
+  --color-warning: #B45309;
+  --color-warning-bg: rgba(180, 83, 9, 0.1);
+  --color-danger: #DC2626;
+  --color-danger-bg: rgba(220, 38, 38, 0.1);
+  --color-info: #0284C7;
+  --color-star: #CA8A04;
+
+  /* Badges & Tags */
+  --badge-movie-text: #BE185D;
+  --badge-movie-bg: rgba(190, 24, 93, 0.12);
+  --badge-tv-text: #6D28D9;
+  --badge-tv-bg: rgba(109, 40, 217, 0.12);
+  --badge-imdb-text: #854D0E;
+  --badge-imdb-bg: rgba(202, 138, 4, 0.14);
+
+  /* Toasts */
+  --toast-bg: #FFFFFF;
+  --toast-text: #0F172A;
+  --toast-border: rgba(0, 0, 0, 0.12);
+  --toast-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+
+  /* Code & Quotes */
+  --code-bg: rgba(0, 0, 0, 0.05);
+
+  /* Borders & Shadows */
   --border-subtle: rgba(0, 0, 0, 0.08);
-  --border-active: rgba(139, 92, 246, 0.4);
+  --border-active: rgba(124, 58, 237, 0.45);
   --shadow-subtle: 0 4px 16px rgba(15, 23, 42, 0.06);
+  --shadow-dropdown: 0 12px 30px -4px rgba(15, 23, 42, 0.14), 0 6px 12px -4px rgba(15, 23, 42, 0.08);
 }
 
 /* ========================================================
@@ -353,12 +430,8 @@ button {
 }
 
 .mode-item:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-hover);
   color: var(--text-primary);
-}
-
-[data-theme="light"] .mode-item:hover {
-  background: rgba(0, 0, 0, 0.04);
 }
 
 .mode-item.active {
@@ -425,13 +498,9 @@ button {
   margin-left: auto;
   font-size: 11px;
   padding: 1px 6px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-hover);
   border-radius: var(--radius-full);
   color: var(--text-muted);
-}
-
-[data-theme="light"] .count-badge {
-  background: rgba(0, 0, 0, 0.08);
 }
 
 /* Recent Conversations */
@@ -456,17 +525,14 @@ button {
 }
 
 .history-item:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-hover);
   color: var(--text-primary);
-}
-
-[data-theme="light"] .history-item:hover {
-  background: rgba(0, 0, 0, 0.04);
 }
 
 .history-item.active {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-hover);
   color: var(--text-primary);
+  font-weight: 600;
 }
 
 .history-title {
@@ -607,9 +673,9 @@ button {
 }
 
 .shield-chip.active {
-  border-color: #10B981;
-  color: #10B981;
-  background: rgba(16, 185, 129, 0.08);
+  border-color: var(--color-success);
+  color: var(--color-success);
+  background: var(--color-success-bg);
 }
 
 .chip-poster {
@@ -617,7 +683,7 @@ button {
   height: 20px;
   border-radius: 2px;
   object-fit: cover;
-  background: #252535;
+  background: var(--bg-thumb);
 }
 
 .chip-title {
@@ -684,7 +750,7 @@ button {
   flex-direction: column;
   gap: 4px;
   z-index: 50;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-dropdown);
   min-width: 170px;
 }
 
@@ -742,7 +808,7 @@ button {
 
 .btn-icon-subtle:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-hover);
 }
 
 .btn-icon-subtle:active {
@@ -1037,6 +1103,59 @@ button {
   border: none;
   border-top: 1px solid var(--border-subtle);
   margin: 14px 0;
+}
+
+.message-bubble code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--code-bg);
+  color: var(--text-primary);
+}
+
+.message-bubble pre {
+  margin: 10px 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--code-bg);
+  border: 1px solid var(--border-subtle);
+  overflow-x: auto;
+}
+
+.message-bubble pre code {
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+.message-bubble blockquote {
+  margin: 10px 0;
+  padding: 8px 14px;
+  border-left: 3px solid var(--accent-primary);
+  background: rgba(139, 92, 246, 0.06);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text-secondary);
+}
+
+.message-bubble table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 13.5px;
+}
+
+.message-bubble th,
+.message-bubble td {
+  padding: 8px 12px;
+  border: 1px solid var(--border-subtle);
+  text-align: left;
+}
+
+.message-bubble th {
+  background: var(--bg-surface-elevated);
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 /* Typing cursor */
@@ -1825,15 +1944,15 @@ textarea.chat-input {
 }
 
 .badge-rating.imdb {
-  background: rgba(245, 197, 24, 0.15);
-  color: #F5C518;
-  border: 1px solid rgba(245, 197, 24, 0.3);
+  background: var(--badge-imdb-bg);
+  color: var(--badge-imdb-text);
+  border: 1px solid var(--badge-imdb-text);
 }
 
 .badge-rating.tmdb {
   background: rgba(1, 180, 228, 0.15);
-  color: #01B4E4;
-  border: 1px solid rgba(1, 180, 228, 0.3);
+  color: var(--color-info);
+  border: 1px solid var(--color-info);
 }
 
 .badge-rating.duration {
@@ -1924,9 +2043,9 @@ textarea.chat-input {
   gap: 4px;
   padding: 3px 8px;
   border-radius: var(--radius-sm);
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  color: #10B981;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success);
+  color: var(--color-success);
   font-size: 11.5px;
   font-weight: 600;
 }
@@ -1938,9 +2057,9 @@ textarea.chat-input {
   gap: 4px;
   font-size: 11px;
   font-weight: 600;
-  color: #10B981;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success);
   padding: 2px 7px;
   border-radius: var(--radius-full);
 }
@@ -2112,7 +2231,7 @@ textarea.chat-input {
   background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.5), 0 6px 12px -4px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-dropdown);
   z-index: 60;
   padding: 6px;
   display: flex;
@@ -2131,7 +2250,7 @@ textarea.chat-input {
 }
 
 .wl-search-result-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-hover);
 }
 
 .btn-wl-add-result {
@@ -2193,7 +2312,7 @@ textarea.chat-input {
 
 .wl-tab-btn:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-hover);
 }
 
 .wl-tab-btn.active {
@@ -2742,7 +2861,7 @@ textarea.chat-input {
 }
 
 .shield-result-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-hover);
 }
 
 .shield-result-thumb {
@@ -2750,7 +2869,7 @@ textarea.chat-input {
   height: 54px;
   border-radius: 4px;
   object-fit: cover;
-  background: #252535;
+  background: var(--bg-thumb);
   flex-shrink: 0;
 }
 
@@ -2783,13 +2902,13 @@ textarea.chat-input {
   text-transform: uppercase;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(139, 92, 246, 0.18);
-  color: #C084FC;
+  background: var(--badge-tv-bg);
+  color: var(--badge-tv-text);
 }
 
 .badge-type.movie {
-  background: rgba(236, 72, 153, 0.18);
-  color: #F472B6;
+  background: var(--badge-movie-bg);
+  color: var(--badge-movie-text);
 }
 
 /* Selected Title Progress Card */
@@ -2814,7 +2933,7 @@ textarea.chat-input {
   height: 74px;
   border-radius: 6px;
   object-fit: cover;
-  background: #252535;
+  background: var(--bg-thumb);
   flex-shrink: 0;
 }
 
@@ -2845,7 +2964,7 @@ textarea.chat-input {
 .btn-link {
   background: none;
   border: none;
-  color: #A78BFA;
+  color: var(--accent-primary);
   font-size: 11.5px;
   cursor: pointer;
   padding: 0;
@@ -3006,8 +3125,8 @@ textarea.chat-input {
 
 .btn-add-another-show:hover {
   background: rgba(139, 92, 246, 0.12);
-  border-color: #8B5CF6;
-  color: #FFFFFF;
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
 .btn-add-another-show .btn-add-icon {
@@ -3064,8 +3183,8 @@ textarea.chat-input {
 }
 
 .shield-card.is-active {
-  border-color: #10B981;
-  background: rgba(16, 185, 129, 0.05);
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
 }
 
 .shield-card-left {
@@ -3081,7 +3200,7 @@ textarea.chat-input {
   height: 54px;
   border-radius: 4px;
   object-fit: cover;
-  background: #252535;
+  background: var(--bg-thumb);
   flex-shrink: 0;
 }
 
@@ -3114,8 +3233,8 @@ textarea.chat-input {
   text-transform: uppercase;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(16, 185, 129, 0.18);
-  color: #10B981;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .shield-card-progress {
@@ -3237,7 +3356,7 @@ textarea.chat-input {
 
 .shield-banner-progress {
   font-size: 12px;
-  color: #10B981;
+  color: var(--color-success);
   font-weight: 600;
 }
 
@@ -3252,7 +3371,7 @@ textarea.chat-input {
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: #10B981;
+  background: var(--color-success);
   color: #FFFFFF;
   border: none;
   border-radius: var(--radius-sm);
@@ -3272,28 +3391,28 @@ textarea.chat-input {
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: #1A1A24;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #FFFFFF;
+  background: var(--toast-bg);
+  border: 1px solid var(--toast-border);
+  color: var(--toast-text);
   padding: 10px 18px;
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   gap: 14px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--toast-shadow);
   z-index: 300;
   font-size: 13px;
   animation: slideUpToast 0.25s ease-out;
 }
 
 .toast-undo-msg {
-  color: var(--text-primary);
+  color: var(--toast-text);
 }
 
 .btn-toast-undo {
   background: none;
   border: none;
-  color: #10B981;
+  color: var(--color-success);
   font-weight: 700;
   font-size: 13px;
   cursor: pointer;
@@ -3380,12 +3499,21 @@ textarea.chat-input {
 .mood-card:hover {
   border-color: var(--border-active);
   transform: translateY(-2px);
-  background: #252535;
+  background: var(--bg-hover-card);
+}
+
+.mood-card:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.mood-card:active {
+  transform: translateY(0);
 }
 
 .mood-card.active {
   border-color: var(--accent-primary);
-  background: rgba(139, 92, 246, 0.12);
+  background: rgba(139, 92, 246, 0.16);
   box-shadow: 0 0 0 1px var(--accent-primary);
 }
 
@@ -3469,7 +3597,7 @@ textarea.chat-input {
 .chip-filter:hover,
 .platform-chip:hover {
   color: var(--text-primary);
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: var(--border-hover);
 }
 
 .chip-filter.active,
@@ -3584,21 +3712,21 @@ textarea.chat-input {
 }
 
 .card-badge-label.fan-favourite {
-  background: rgba(245, 158, 11, 0.14);
-  color: #F59E0B;
-  border: 1px solid rgba(245, 158, 11, 0.32);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
 }
 
 .card-badge-label.critically-acclaimed {
-  background: rgba(139, 92, 246, 0.14);
-  color: #A78BFA;
-  border: 1px solid rgba(139, 92, 246, 0.32);
+  background: var(--badge-tv-bg);
+  color: var(--badge-tv-text);
+  border: 1px solid var(--accent-primary);
 }
 
 .card-badge-label.hidden-gem {
-  background: rgba(16, 185, 129, 0.14);
-  color: #34D399;
-  border: 1px solid rgba(16, 185, 129, 0.32);
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
 }
 
 .platform-header-row {
@@ -3657,7 +3785,7 @@ textarea.chat-input {
   aspect-ratio: 2/3;
   border-radius: var(--radius-md);
   overflow: hidden;
-  background: var(--bg-surface-elevated);
+  background: var(--bg-thumb);
 }
 
 .pick-poster {
@@ -3773,7 +3901,7 @@ textarea.chat-input {
 }
 
 .btn-add-wl.saved {
-  background: #10B981;
+  background: var(--color-success);
   color: #FFFFFF;
 }
 
@@ -4143,7 +4271,7 @@ textarea.chat-input {
   height: 105px;
   border-radius: var(--radius-sm);
   object-fit: cover;
-  background: var(--bg-surface-elevated);
+  background: var(--bg-thumb);
 }
 
 .hero-info {
@@ -4225,7 +4353,7 @@ textarea.chat-input {
   display: inline-block;
   width: 13px;
   height: 13px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
+  border: 2px solid var(--border-subtle);
   border-top-color: currentColor;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -4271,9 +4399,9 @@ textarea.chat-input {
 }
 
 .better-val {
-  color: #10B981 !important;
+  color: var(--color-success) !important;
   font-weight: 700 !important;
-  background: rgba(16, 185, 129, 0.08);
+  background: var(--color-success-bg);
   border-radius: 4px;
   padding: 2px 6px;
   display: inline-block;
@@ -4307,8 +4435,8 @@ textarea.chat-input {
 
 .verdict-spoiler-tag {
   font-size: 11px;
-  color: #10B981;
-  background: rgba(16, 185, 129, 0.1);
+  color: var(--color-success);
+  background: var(--color-success-bg);
   padding: 2px 8px;
   border-radius: var(--radius-full);
 }
@@ -4416,15 +4544,15 @@ textarea.chat-input {
 }
 
 .cat-winner.winner-a {
-  color: #8B5CF6;
+  color: var(--accent-primary);
 }
 
 .cat-winner.winner-b {
-  color: #EC4899;
+  color: var(--accent-secondary);
 }
 
 .cat-winner.winner-tie {
-  color: #10B981;
+  color: var(--color-success);
 }
 
 .cat-reason {
@@ -4546,7 +4674,7 @@ textarea.chat-input {
 
 .btn-side-choice:hover {
   border-color: var(--border-active);
-  background: #252535;
+  background: var(--bg-hover-card);
 }
 
 .debate-thread {
@@ -4943,8 +5071,8 @@ textarea.chat-input {
 .rating-star-icon {
   width: 13px;
   height: 13px;
-  fill: #eab308;
-  color: #eab308;
+  fill: var(--color-star);
+  color: var(--color-star);
   display: inline-block;
   vertical-align: -1.5px;
 }

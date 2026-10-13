@@ -881,7 +881,12 @@ function loadFromStorage() {
       : [];
 
     const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME);
-    if (savedTheme) state.theme = savedTheme;
+    if (savedTheme) {
+      state.theme = savedTheme;
+    } else {
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      state.theme = prefersDark ? 'dark' : 'light';
+    }
 
     const savedMode = localStorage.getItem(STORAGE_KEYS.MODE);
     if (savedMode && MODE_DATA[savedMode]) state.currentMode = savedMode;
@@ -3137,22 +3142,35 @@ function isPureProgressStatement(str) {
 // ========================================================
 // 13. THEME MANAGEMENT
 // ========================================================
-function applyTheme(theme) {
+function applyTheme(theme, save = true) {
   state.theme = theme;
   document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem(STORAGE_KEYS.THEME, theme);
+  if (save) {
+    localStorage.setItem(STORAGE_KEYS.THEME, theme);
+  }
 
-  if (theme === 'light') {
-    dom.themeIconMoon.classList.add('hidden');
-    dom.themeIconSun.classList.remove('hidden');
-  } else {
-    dom.themeIconMoon.classList.remove('hidden');
-    dom.themeIconSun.classList.add('hidden');
+  if (dom.themeIconMoon && dom.themeIconSun) {
+    if (theme === 'light') {
+      dom.themeIconMoon.classList.add('hidden');
+      dom.themeIconSun.classList.remove('hidden');
+    } else {
+      dom.themeIconMoon.classList.remove('hidden');
+      dom.themeIconSun.classList.add('hidden');
+    }
   }
 }
 
 function toggleTheme() {
-  applyTheme(state.theme === 'dark' ? 'light' : 'dark');
+  applyTheme(state.theme === 'dark' ? 'light' : 'dark', true);
+}
+
+// Listen to system preference changes when user hasn't explicitly set a preference
+if (window.matchMedia) {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    if (!localStorage.getItem(STORAGE_KEYS.THEME)) {
+      applyTheme(e.matches ? 'dark' : 'light', false);
+    }
+  });
 }
 
 // ========================================================

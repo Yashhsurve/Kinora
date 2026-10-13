@@ -20,6 +20,18 @@
   <link rel="icon" type="image/png" href="logo.png?v=3" />
   <link rel="apple-touch-icon" href="logo.png?v=3" />
 
+  <!-- Instant Theme Initialization (Prevents flash of wrong theme on load) -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('kinora_theme_v1');
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var theme = saved ? saved : (prefersDark ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {}
+    })();
+  </script>
+
   <!-- Main Stylesheet -->
   <link rel="stylesheet" href="styles.css" />
 </head>
