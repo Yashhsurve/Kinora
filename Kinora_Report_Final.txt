@@ -1,0 +1,419 @@
+D.Y. PATIL ACADEMIC EDUCATION EXCELLENCE FEDERATION'S
+Dr. D. Y. Patil Technical Campus
+Polytechnic | Engineering | MCA
+Dr. D. Y. Patil Technical Campus, Varale, Talegaon.
+
+MINI PROJECT REPORT
+ON
+Kinora: An AI-Powered Movie and Series Recommendation System Using Rule-Based Reasoning and Generative AI
+
+SUBMITTED TO THE SAVITRIBAI PHULE PUNE UNIVERSITY,
+IN PARTIAL FULFILLMENT OF THE REQUIREMENTS OF
+TECHNICAL SEMINAR / PROJECT WORK OF
+THIRD YEAR COMPUTER ENGINEERING
+
+BY
+Manish Dhupadale
+Shivam Lahase
+Yash Surve
+Abhishek Ghute
+
+UNDER THE GUIDANCE OF
+Prof. ________
+
+FOR THE ACADEMIC YEAR
+2026-2027
+
+
+
+CERTIFICATE
+
+This is to certify that the mini project report entitled "Kinora: An AI-Powered Movie and Series Recommendation System Using Rule-Based Reasoning and Generative AI" submitted by Manish Dhupadale, Shivam Lahase, Yash Surve, and Abhishek Ghute is a bonafide record of the work carried out under the supervision of Prof. ________.
+
+This report is approved in partial fulfillment of the requirements of the mini project work of Savitribai Phule Pune University for the academic year 2026-2027.
+
+
+
+
+Prof. ________                     Prof. ________
+(Guide)                           (Seminar Coordinator)
+
+
+
+
+Dr. Shyamsunder Kosbatwar          Dr. ________
+(Head of Department)               (Principal)
+
+
+
+TABLE OF CONTENTS
+
+CHAPTER 1: INTRODUCTION
+  1.1 Background and Problem Statement
+  1.2 The Hybrid AI Architecture Paradigm
+  1.3 Artificial Intelligence Concepts Used
+CHAPTER 2: WORKING PROCEDURE
+  2.1 Rule-Based Recommendation Engine
+      2.1.1 Knowledge Base and Mood-to-Genre Mapping
+      2.1.2 Deterministic IF-THEN Filtering Rules
+      2.1.3 Bayesian Weighted Rating and Scoring Formula
+      2.1.4 Step-by-Step Worked Numerical Example
+      2.1.5 Exclusion, Deduplication, and Discovery Styles
+  2.2 AI Conversational and Grounding Layer
+      2.2.1 Natural Language Intent and Parameter Extraction
+      2.2.2 Large Language Model Integration and Tool Calling
+      2.2.3 Prompt Conditioning and Operational Guardrails
+      2.2.4 Real-Time Streaming and Safety Auditing
+  2.3 Hybrid Layer Cooperation and Workflow
+  2.4 System Architecture Diagram and Technology Stack
+CHAPTER 3: ADVANTAGES AND DISADVANTAGES
+  3.1 Advantages of the Hybrid Approach
+  3.2 Technical Constraints and Limitations
+CHAPTER 4: APPLICATIONS
+CHAPTER 5: FUTURE SCOPE
+CHAPTER 6: CONCLUSION
+
+
+
+CHAPTER 1: INTRODUCTION
+
+1.1 Background and Problem Statement
+Recommender systems represent a cornerstone of applied Artificial Intelligence. Digital consumers today face severe catalog fragmentation across dozens of streaming services. Conventional catalog databases, such as IMDb or The Movie Database (TMDB), depend on rigid keyword search bars and relational filters. They cannot interpret subjective emotional prompts, such as "recommend an atmospheric mystery under two hours that feels like Shutter Island and is available to stream in India."
+
+Conversely, standalone Large Language Models (LLMs) offer fluent natural language comprehension, but operate with fixed pre-training parameters. When functioning without external data grounding, standalone LLMs frequently hallucinate release dates, misattribute directors, and recommend non-existent sequels. Furthermore, generic conversational models routinely spoil major plot twists, character deaths, and season conclusions because they lack awareness of a viewer's episode progress in a multi-season series.
+
+1.2 The Hybrid AI Architecture Paradigm
+To resolve these limitations, Kinora was engineered as a Hybrid Artificial Intelligence Recommendation System for an Artificial Intelligence curriculum. Kinora couples two core AI paradigms:
+1. A deterministic, knowledge-based Rule-Based Recommendation Engine that executes attribute filtering, candidate pool harvesting, franchise deduplication, and mathematical Bayesian scoring against verified cinema databases.
+2. A probabilistic Generative AI Conversational Layer powered by Google Gemini foundation models that handles natural language understanding, entity extraction, grounded tool execution, and personalized narrative justifications.
+
+The rule-based engine greatly reduces hallucination risk by selecting candidate titles directly from verified external database records and enforcing quantitative quality thresholds. Meanwhile, the generative AI layer provides conversational fluidity, semantic intent parsing, and contextual explanations. Furthermore, Kinora implements an upstream backend data filter designated as the Spoiler Shield, which prunes database payloads before they enter the language model's context window, lowering the risk of accidental plot leaks. However, because the LLM's own pre-training weights may already contain latent knowledge of popular shows, external data filtering alone cannot prevent all plot leakage; hence, prompt guardrails and a zero-temperature safety audit are employed as complementary layers of defense. The rule engine's candidate pool comes directly from verified TMDB records, but the AI-written text commentary remains probabilistic and is not guaranteed to be error-free.
+
+1.3 Artificial Intelligence Concepts Used
+The design and implementation of Kinora incorporate foundational Artificial Intelligence concepts:
+1. Rule-Based and Knowledge-Based Systems: The recommendation core relies on deterministic IF-THEN production rules, expert heuristics, and formal mood-to-genre ontologies that translate affective human moods into database queries.
+2. Content-Based Attribute Filtering: Recommendations systematically evaluate item metadata (genres, original language, runtime limits, release era, and streaming platform providers) against user constraints.
+3. Bayesian Statistical Ranking: The scoring engine implements a Bayesian Weighted Rating model that mathematically mitigates sample size bias for titles with high ratings but low vote counts.
+4. Natural Language Processing (NLP) and Semantic Intent Extraction: The conversational layer analyzes unstructured prompts to extract emotional tone, runtime limits, media types, and reference titles.
+5. Large Language Models (LLMs): Google Gemini models (@google/genai SDK v2.28.0) perform multi-turn dialogue management, comparative film critique, and concise recommendation blurbs.
+6. Function Calling and Tool Grounding: The LLM is bound to eight structured JSON tools, emitting function calls to fetch live data from TMDB, OMDb, and Wikipedia REST APIs rather than answering from memory.
+7. Automated Safety Auditing: A secondary zero-temperature LLM validation pass inspects generated outputs against user watch boundaries to detect and intercept plot leaks before client delivery.
+8. Human-AI Interaction (HAI): Real-time token streaming via Server-Sent Events (SSE), interactive Title Inspector drawers, and two-stage debate pipelines foster transparent decision-making.
+
+
+
+CHAPTER 2: WORKING PROCEDURE
+
+2.1 Rule-Based Recommendation Engine
+The backbone of Kinora's recommendation pipeline is a deterministic rule-based recommendation engine implemented in services/mediaData.js. It transforms user emotional states and physical constraints into curated, ranked candidate pools using structured knowledge representations.
+
+2.1.1 Knowledge Base and Mood-to-Genre Mapping
+The rule-based engine defines a formal knowledge base mapping specific affective moods to verified TMDB genre IDs, temporal boundaries, and thematic keywords:
+
+Mood: Cozy
+- Movie Genre IDs: 35 (Comedy), 10751 (Family), 10749 (Romance)
+- TV Genre IDs: 35 (Comedy), 10751 (Family)
+- Temporal Constraint: None
+- Thematic Keywords: heartwarming, feel-good, comfort
+
+Mood: Hyped
+- Movie Genre IDs: 28 (Action), 12 (Adventure), 53 (Thriller)
+- TV Genre IDs: 10759 (Action and Adventure)
+- Temporal Constraint: None
+- Thematic Keywords: adrenaline, fast-paced, high-stakes
+
+Mood: Heartbroken
+- Movie Genre IDs: 18 (Drama), 10749 (Romance)
+- TV Genre IDs: 18 (Drama)
+- Temporal Constraint: None
+- Thematic Keywords: emotional, bittersweet, poignant
+
+Mood: Mind-bending
+- Movie Genre IDs: 878 (Science Fiction), 9648 (Mystery), 53 (Thriller)
+- TV Genre IDs: 10765 (Sci-Fi and Fantasy), 9648 (Mystery)
+- Temporal Constraint: None
+- Thematic Keywords: psychological, plot twist, thought-provoking
+
+Mood: Scared
+- Movie Genre IDs: 27 (Horror), 53 (Thriller), 9648 (Mystery)
+- TV Genre IDs: 9648 (Mystery)
+- Temporal Constraint: None
+- Thematic Keywords: haunting, spine-chilling, suspense
+
+Mood: Nostalgic
+- Movie Genre IDs: 12 (Adventure), 35 (Comedy), 10751 (Family), 878 (Science Fiction), 18 (Drama)
+- TV Genre IDs: 10759 (Action and Adventure), 35 (Comedy)
+- Temporal Constraint: Primary release date on or before 2005-12-31
+- Thematic Keywords: timeless, classic, golden era
+
+Mood: Laugh-out-loud
+- Movie Genre IDs: 35 (Comedy)
+- TV Genre IDs: 35 (Comedy)
+- Temporal Constraint: None
+- Thematic Keywords: hilarious, witty, comedy
+
+Mood: Inspired
+- Movie Genre IDs: 18 (Drama), 36 (History), 99 (Documentary)
+- TV Genre IDs: 18 (Drama), 99 (Documentary)
+- Temporal Constraint: None
+- Thematic Keywords: triumph, perseverance, uplifting
+
+2.1.2 Deterministic IF-THEN Filtering Rules
+The recommendation engine executes a sequential pipeline of IF-THEN production rules:
+- Rule 1 (Candidate Harvest): IF a user selects a target mood, THEN query the TMDB Discover API across multiple pages in parallel using the mapped genre IDs joined with logical OR operators, sorted initially by popularity descending.
+- Rule 2 (Temporal Clamping): IF the mood is "Nostalgic", THEN inject an upper release date boundary of December 31, 2005.
+- Rule 3 (Runtime Restriction): IF media type is movie AND user selects "under 90 min", THEN apply runtime constraint runtime <= 90 minutes. IF user selects "under 2 hrs", THEN apply runtime constraint runtime <= 120 minutes.
+- Rule 4 (Media Type Routing): IF media type is "anime", THEN enforce genre ID 16 (Animation) and original language code "ja" (Japanese). IF media type is "movie", harvest 3 movie pages (60 candidates); IF "tv", harvest 3 series pages; IF "any", harvest 2 movie pages and 2 tv pages simultaneously (80 raw candidates).
+- Rule 5 (Regional Quality Thresholds): Standard global cinema requires a vote count threshold v >= 1500 and a rating threshold R >= 6.8. However, regional cinema operates under smaller international voting populations. IF the candidate original language belongs to regional codes (Hindi: hi, Tamil: ta, Telugu: te, Malayalam: ml, Kannada: kn, Bengali: bn, Korean: ko, Japanese: ja, French: fr, Spanish: es), THEN the minimum vote count threshold is relaxed to v >= 300, while preserving R >= 6.8.
+- Rule 6 (Graceful Quality Relaxation): IF the strict filtering criteria yield fewer than 15 candidates, THEN dynamically relax thresholds: global vote minimum drops to v >= 800, regional vote minimum drops to v >= 150, and rating minimum drops to R >= 6.5.
+- Rule 7 (Platform Availability and Auto-Expansion): IF the user specifies target streaming platforms (e.g., Netflix: 8, Prime Video: 119, Disney+ Hotstar: 122, JioCinema: 220, Zee5: 232, SonyLIV: 237, Apple TV+: 350), THEN verify Indian OTT flatrate streaming availability. IF the filtered subset contains fewer than 6 titles, THEN automatically expand the pool to include all streaming platforms and attach an explanatory notification to prevent recommendation starvation.
+
+2.1.3 Bayesian Weighted Rating and Scoring Formula
+Raw average ratings on commercial databases suffer from popularity skew: an obscure title with 15 perfect votes (rating 10.0) would falsely outrank an internationally acclaimed masterpiece with 40,000 votes (rating 8.4). To resolve this, the rule-based engine computes a Bayesian Weighted Rating (WR) adapted from actuarial statistics:
+
+WR = (v / (v + m)) * R + (m / (v + m)) * C
+
+Where:
+- v = The candidate title's actual vote count.
+- m = The minimum vote threshold parameter (1500 for global English, 300 for regional language titles).
+- R = The candidate title's raw vote average (1.0 to 10.0 scale).
+- C = The arithmetic mean rating across all titles currently present in the candidate pool.
+
+The engine then calculates a final Composite Recommendation Score by combining three weighted factors:
+
+Score = 0.5 * normPop + 0.3 * normWR + 0.2 * moodGenreFit
+
+Where:
+- normPop: Logarithmic normalized popularity:
+  normPop = min(1.0, max(0.0, log10(popularity + 1) / log10(maxPopularity + 1)))
+- normWR: Normalized Bayesian rating:
+  normWR = min(1.0, max(0.0, WR / 10.0))
+- moodGenreFit: Deterministic genre affinity score:
+  If the title contains 2 or more genres matching the mood configuration: fit = 1.0.
+  If the title contains exactly 1 matching genre: fit = 0.85.
+  If the title contains 0 matching genres: fit = 0.60.
+
+Finally, the engine assigns deterministic UI badge classifications based on data thresholds:
+- "Fan favourite": Assigned if v >= 4000, or if normPop > 0.75 and v >= 2000.
+- "Critically acclaimed": Assigned if raw R >= 8.0 or normWR >= 0.80.
+- "Hidden gem": Assigned if v is between 300 and 2500, and raw R >= 7.5.
+
+2.1.4 Step-by-Step Worked Numerical Example
+The following evaluation of the neo-noir mystery "The Batman" (TMDB ID: 414906) under the "Mind-bending" mood uses live candidate pool values fetched via the TMDB API on October 17, 2026:
+Candidate Metadata:
+- Title: The Batman (2022)
+- Language: English (Global threshold m = 1500)
+- Raw Vote Count (v): 12,686
+- Raw Rating (R): 7.7
+- Candidate Pool Mean Rating (C): 7.42
+- Candidate Raw Popularity: 89.27
+- Max Pool Popularity (maxPop): 136.58
+- Genres: Crime, Mystery (9648), Thriller (53)
+- Mind-bending Mood Genre Target: 878, 9648, 53
+
+Step 1: Compute Bayesian Weighted Rating (WR)
+Weight for candidate rating:
+W_candidate = v / (v + m) = 12686 / (12686 + 1500) = 12686 / 14186 = 0.8943
+Weight for pool mean:
+W_mean = m / (v + m) = 1500 / (12686 + 1500) = 1500 / 14186 = 0.1057
+WR = (0.8943 * 7.7) + (0.1057 * 7.42) = 6.8861 + 0.7843 = 7.6704
+normWR = 7.6704 / 10.0 = 0.7670
+
+Step 2: Compute Logarithmic Normalized Popularity (normPop)
+log10(popularity + 1) = log10(89.27 + 1) = log10(90.27) = 1.9556
+log10(maxPop + 1) = log10(136.58 + 1) = log10(137.58) = 2.1386
+normPop = 1.9556 / 2.1386 = 0.9144
+
+Step 3: Compute Mood Genre Fit
+The title has Mystery (9648) and Thriller (53), matching 2 target genres.
+moodGenreFit = 1.0000
+
+Step 4: Compute Composite Recommendation Score
+Score = (0.5 * 0.9144) + (0.3 * 0.7670) + (0.2 * 1.0000)
+Score = 0.4572 + 0.2301 + 0.2000 = 0.8873
+Result: Composite score is 0.8873 (computed as 0.8884 with unrounded internal floats). Because vote count v = 12,686 >= 4000, the title is deterministically badged as a "Fan favourite".
+
+2.1.5 Exclusion, Deduplication, and Discovery Styles
+The rule engine applies two additional deterministic logic passes:
+1. Franchise and Sequel Deduplication: Commercial movie databases frequently return multiple sequels in a single query (e.g., John Wick, John Wick: Chapter 2). Kinora extracts franchise base keys via regular expression parsing (splitting on colons and hyphens and stripping trailing Roman/Arabic numerals or "Chapter/Part" suffixes). If multiple entries share a base key, the engine deterministically retains only the earliest released entry, preventing franchise repetition.
+2. Discovery Ordering Modes:
+- Popular Style: Candidates are presented strictly in descending order of their composite score.
+- Hidden Gems Style: Candidates meeting the criteria (v between 300 and 2500, R >= 7.5) are extracted, sorted by raw rating descending, and placed ahead of mainstream blockbusters.
+- Balanced Mix Style: The engine executes an interleaving algorithm that alternates two popular titles with one hidden gem across the recommendation carousel.
+
+2.2 AI Conversational and Grounding Layer
+The conversational intelligence of Kinora is driven by Google Gemini models utilizing the official @google/genai SDK (version ^2.28.0). Rather than generating ungrounded text, the model functions as a cognitive agent interfacing with structured system instructions and external APIs.
+
+2.2.1 Natural Language Intent and Parameter Extraction
+When a user submits a natural language message, Gemini acts as an NLP entity extractor. It parses colloquial expressions (such as "I need something terrifying and quick before bed") into structured conceptual variables: target mood (Scared), media type (movie), and runtime limit (under 90 min).
+
+2.2.2 Large Language Model Integration and Tool Calling
+Kinora registers exactly eight function declarations in Gemini's runtime context:
+1. search_title(query, year, type): Searches TMDB for movies, series, or anime by title and year.
+2. get_details(id, type): Fetches metadata including director, top 8 cast, trailer URLs, and Indian streaming platforms.
+3. get_season_episodes(series_id, season): Retrieves episode rosters, release dates, and synopses.
+4. get_imdb_rating(imdb_id): Retrieves official IMDb ratings, vote counts, and Rotten Tomatoes scores via OMDb API.
+5. get_watch_providers(id, type, region): Queries JustWatch streaming data via TMDB for India (IN) or international regions.
+6. get_trending(type): Identifies weekly trending titles across cinema and television.
+7. get_similar(id, type): Queries relational nearest-neighbor recommendations from TMDB.
+8. discover(filters): Directly queries TMDB discover with genre and release year constraints.
+
+Candidate model failover ensures system availability:
+- Primary chat model: gemini-3.5-flash-lite
+- First fallback chat model: gemini-flash-lite-latest
+- Second fallback chat model: gemini-3.5-flash
+- Mood blurbs and comparison verdict: gemini-3.5-flash-lite (fallback: gemini-3.5-flash)
+- Debate turns: gemini-3.5-flash-lite
+
+When a user asks a factual question, Gemini emits a structured JSON function call. The Express backend intercepts the call, executes it against services/mediaData.js, applies active Spoiler Shield filters, and returns the structured data to Gemini. Gemini then synthesizes a conversational response grounded in the returned JSON.
+
+If a query pertains to a brand-new 2025/2026 title missing from TMDB, the backend triggers a live Wikipedia REST API fallback. It scrapes the verified infobox for premiere dates and broadcast networks, grounding the response and drastically lowering the likelihood of "does not exist" hallucinations.
+
+2.2.3 Prompt Conditioning and Operational Guardrails
+Gemini's behavior is governed by multi-layered system instructions:
+- Persona and Brevity Constraint: Kinora is instructed to act as a witty cinephile buddy, restricting general responses to 3 to 6 concise lines and recommending at most 3 titles with title, year, and a single-line explanation.
+- The Honesty Rule: The model is strictly forbidden from asserting that a title is unannounced or non-existent unless external tools explicitly confirm it. System instructions anchor the model with the current server date.
+- The Lookup Rule: The model is mandated to invoke external tools before answering questions regarding release dates, cast, ratings, or streaming availability, forbidding reliance on internal parametric memory.
+- Spoiler Shield Guardrail: For any active protected series, the prompt injects explicit boundary statements (e.g., "User is at Dark Season 2 Episode 4. Events after Season 2 Episode 4 are strictly forbidden spoilers. Never confirm or deny future theories.").
+
+2.2.4 Real-Time Streaming and Safety Auditing
+Responses are delivered to the browser using Server-Sent Events (SSE). The Express server flushes headers (text/event-stream), emits structured Title Inspector payloads if media metadata was discovered, and streams textual tokens with a 25ms pacing interval. If the client disconnects prematurely, a res.on('close') listener aborts upstream model generation to conserve API quotas.
+
+To protect against spoilers, Kinora implements an automated Zero-Temperature Safety Audit. For any query concerning a protected title, the completed text is evaluated by an independent call to gemini-3.5-flash-lite configured with temperature 0.0 and maxOutputTokens: 10. The audit prompt queries whether any plot twists, deaths, or developments occurring beyond the user's progress boundary are present. If the audit returns "YES", the backend intercepts the text and substitutes a safe fallback: "I almost said too much, so I held that back. Ask me about what you've watched so far."
+
+Personalization features are implemented strictly without vector embeddings:
+- Taste Profile: Consists of pre-configured UI quick-prompt suggestion chips on the chat interface that inject user genre and title constraints into Gemini's prompt context.
+- Watchlist: Implemented as a client-side localStorage store (kinora_watchlist_v1) managing saved titles, watch status, and dismissed items without cloud account synchronization.
+
+2.3 Hybrid Layer Cooperation and Workflow
+The cooperation between the rule-based engine and the generative AI layer operates as a unified multi-stage pipeline:
+1. Request Reception: The user enters a natural-language query in chat or selects interactive filters in Mood Picks.
+2. Conversational Intent Parsing: In chat mode, Gemini parses the query and extracts parameters. In Mood Picks mode, the frontend dispatches structured filter criteria directly to the backend.
+3. Rule-Based Candidate Processing: The backend rule engine executes discovery queries, applies deterministic IF-THEN filters, prunes sequels via regex, and calculates Bayesian weighted ratings and composite scores.
+4. Upstream Spoiler Shielding: Metadata for protected titles is pruned before reaching the conversational layer. Episodes beyond user progress are completely omitted from the JSON payload.
+5. AI Synthesis and Personalized Blurbs: The rule engine passes top ranked candidates to Gemini to generate witty, personalized, 15-word blurbs explaining why each title fits without revealing plot elements.
+6. Client Delivery: The response is streamed via SSE to the browser, rendering interactive title cards, platform badges, and chat text.
+
+2.4 System Architecture Diagram and Technology Stack
+The application architecture bifurcates into two distinct runtime data paths:
+Path A (Mood Picks / Filter Flow): A data-driven discovery pipeline where user filter selections drive the Rule-Based Engine directly, and Gemini is invoked at the final stage solely to generate concise contextual blurbs.
+Path B (Chat / Conversational Flow): A conversational pipeline where Gemini interprets natural language requests, emits function calls intercepted and sanitized by the Spoiler Shield, executes external tool queries, synthesizes the response, and passes through a zero-temperature safety audit for protected titles.
+
+===========================================================================
+                       SYSTEM ARCHITECTURE DIAGRAM
+===========================================================================
+
+                              +----------------+
+                              |   CLIENT UI    |
+                              | (Web Browser)  |
+                              +--------+-------+
+                                       |
+                   +-------------------+-------------------+
+                   |                                       |
+           [PATH A: MOOD PICKS]                    [PATH B: CHAT MODE]
+         Interactive Vibe Filters               Natural Language Queries
+                   |                                       |
+                   v                                       v
+         +--------------------+                 +--------------------+
+         | RULE-BASED ENGINE  |                 | GEMINI LLM AGENT   |
+         | (Deterministic     |                 | (NLP & Parameter   |
+         |  Scoring & Rules)  |                 |  Tool Calling)     |
+         +---------+----------+                 +----------+---------+
+                   |                                       |
+                   | Discover / Filters                    | Function Calls
+                   v                                       v
+         +--------------------+                 +--------------------+
+         |   TMDB API (v3)    |                 |   SPOILER SHIELD   |
+         | (Raw Candidates)   |                 | (Prune Future Ep / |
+         +---------+----------+                 |  Mask Twists)      |
+                   |                            +----------+---------+
+                   | Candidate Pool                        |
+                   v                                       | Sanitized Args
+         +--------------------+                            v
+         | RULE SCORING & WR  |                 +--------------------+
+         | - Bayesian Formula |                 | EXTERNAL TOOLS     |
+         | - Sequel Regex Cut |                 | - TMDB (Details)   |
+         | - Platform Filter  |                 | - OMDb (Ratings)   |
+         +---------+----------+                 | - Wikipedia (Live) |
+                   |                            +----------+---------+
+                   | Top Ranked Candidates                 |
+                   v                                       | Live Tool Data
+         +--------------------+                            v
+         | GEMINI BLURB AI    |                 +--------------------+
+         | (Writes punchy <=15|                 | GEMINI SYNTHESIS   |
+         |  word reasons)     |                 | (Grounded Answer)  |
+         +---------+----------+                 +----------+---------+
+                   |                                       |
+                   | Enriched Cards                        | Candidate Text
+                   |                                       v
+                   |                            +--------------------+
+                   |                            | SAFETY AUDIT       |
+                   |                            | (Protected titles: |
+                   |                            |  Flash-Lite T=0.0) |
+                   |                            +----------+---------+
+                   |                                       |
+                   |                                       | Safe SSE Stream
+                   v                                       v
+         +-----------------------------------------------------------+
+         |                        CLIENT UI                          |
+         |  (Title Inspector, Watchlist LocalStorage, Chat Display)  |
+         +-----------------------------------------------------------+
+
+Technology Stack Specifications:
+- Runtime Environment: Node.js (v18+)
+- Backend Web Framework: Express.js (v4.21.2)
+- AI Foundation Model SDK: @google/genai (v^2.28.0)
+- Foundation Models: gemini-3.5-flash-lite, gemini-flash-lite-latest, gemini-3.5-flash
+- External Cinema APIs: The Movie Database (TMDB v3 API), Open Movie Database (OMDb API), Wikipedia REST API
+- Network Utilities: Custom HTTPS Agent with DNS cache (1.1.1.1, 8.8.8.8) and 10-minute in-memory TTL caching
+- Client Technologies: Vanilla ECMAScript 2022 (ES6+), Vanilla CSS3 Design System with custom dark/light properties, HTML5
+- Client Libraries: Marked.js (Markdown parsing), DOMPurify (HTML sanitization)
+- Client-Side Persistence: Browser LocalStorage (Watchlist, Multi-Show Shields, Session History)
+
+
+
+CHAPTER 3: ADVANTAGES AND DISADVANTAGES
+
+3.1 Advantages of the Hybrid Approach
+1. Significant Reduction of Factual Hallucinations: In the Mood Picks path, candidate selection is handled entirely by the deterministic rule-based engine querying live TMDB records, ensuring titles and attributes pass predefined quality rules. In the Chat path, the conversational model is grounded through dynamic tool calls and the mandatory Lookup Rule. This dual structure substantially reduces hallucinations compared to standalone LLMs, though it reduces rather than completely eliminates errors.
+2. Mathematical Transparency and Explainability: Unlike deep neural network "black box" recommenders, Kinora's ranking is completely auditable. Every title's position is mathematically determined by its Bayesian weighted rating, popularity, and genre match.
+3. Upstream Plot Protection and Defense-in-Depth: Pruning database payloads before they enter the LLM context window prevents the model from receiving future episode summaries. Combined with prompt guardrails and the zero-temperature safety audit, this multi-layered approach lowers the risk of accidental plot leaks, even though no conversational model can be guaranteed 100% leak-proof.
+4. Flexible Conversational Interface: Users are not limited to dropdown menus; they can converse naturally, debate cinema matchups, and ask for nuanced comparisons.
+5. Zero Infrastructure Overhead: By avoiding heavy vector databases or self-hosted neural networks, the entire application runs as a lightweight Node.js service capable of deploying on minimal compute hardware.
+
+3.2 Technical Constraints and Limitations
+1. Third-Party API Rate Limits: Kinora depends on external commercial APIs (TMDB, OMDb, and Google Gemini). Exhaustion of API rate quotas or network interruptions directly affects recommendation availability.
+2. Cold Start for Brand-New Independent Releases: While established regional and global films are thoroughly indexed, obscure festival films with fewer than 150 votes are filtered out by the quality thresholds.
+3. Client-Side Persistence Scope: Watchlists and active spoiler shields are stored in browser localStorage. Consequently, preferences do not synchronize automatically across different physical devices without manual export.
+
+
+
+CHAPTER 4: APPLICATIONS
+
+1. Academic AI Demonstrations: Demonstrates how classical symbolic/rule-based artificial intelligence effectively complements modern generative foundation models to build robust, verifiable software.
+2. Personalized Streaming Companions: Serves as an interactive streaming guide for modern households navigating fragmented OTT platforms (Netflix, Prime Video, Hotstar, JioCinema).
+3. Spoiler-Safe Television Binge Watching: Provides multi-season television viewers with a safe assistant to ask recap questions and character relationship inquiries without risking finale spoilers.
+4. Film Education and Critical Comparison: Offers film students and enthusiasts a comparative debate tool evaluating directing, cinematography, pacing, and cultural impact between landmark films.
+
+
+
+CHAPTER 5: FUTURE SCOPE
+
+1. Multi-Criteria Collaborative Filtering: Future iterations can integrate collaborative filtering algorithms to combine user rating matrices with Kinora's rule-based engine.
+2. Cross-Device Cloud Synchronization: Migrating from browser localStorage to encrypted cloud databases (e.g., PostgreSQL with Supabase) will enable seamless cross-device Watchlist synchronization.
+3. Multimodal Vision Reasoning: Utilizing Gemini Vision to accept user-uploaded posters, film screenshots, or cinematography stills for visual style recommendation.
+4. Voice-Driven Conversational Interface: Integrating Web Speech APIs to allow hands-free voice interaction for smart television environments.
+
+
+
+CHAPTER 6: CONCLUSION
+
+Kinora was developed to address the twin challenges of streaming catalog fragmentation and ungrounded artificial intelligence in modern entertainment software. Contemporary film and television viewers must navigate thousands of titles scattered across disparate streaming platforms, while conventional search engines rely on rigid keyword matching. Conversely, standalone conversational language models suffer from factual hallucinations and frequently ruin storylines by disclosing plot spoilers. The central aim of this project was to demonstrate that coupling a deterministic, rule-based recommendation system with a grounded generative conversational layer creates an effective, transparent, and user-friendly entertainment companion.
+
+To achieve this aim, the system incorporates two primary subsystems. First, a deterministic rule-based recommendation engine was implemented in services/mediaData.js, featuring a formal knowledge base mapping eight emotional moods to verified genre IDs, explicit IF-THEN filters for runtime and media type, regional language voting thresholds, franchise sequel deduplication via regular expressions, and an actuarial Bayesian weighted rating formula. Second, an artificial intelligence conversational layer was developed using the @google/genai SDK, providing Google Gemini foundation models with eight function-calling tools to retrieve verified metadata, IMDb scores, and streaming providers on demand.
+
+The application coordinates these subsystems through two distinct runtime data paths. In the Mood Picks path, user filter selections drive the rule-based engine directly to harvest, prune, and rank candidates from The Movie Database; Gemini is then invoked at the final stage solely to write concise, personalized explanatory blurbs. In the Chat path, Gemini interprets natural-language requests, autonomously invokes external tools, and synthesizes answers. Across both flows, candidate titles originate from verified database records rather than generative memory, while Gemini supplies the conversational flexibility, tone adaptation, and comparative reasoning that static databases lack.
+
+Developing Kinora involved solving several practical software engineering challenges. To mitigate API rate limits and upstream 503 service outages, a three-tier model failover mechanism was integrated across candidate Gemini models. To protect viewers against narrative spoilers, a defense-in-depth architecture was established: backend tools prune future episode summaries upstream before data reaches the model, system instructions enforce strict watch boundaries, and a zero-temperature safety audit inspects completed responses for protected titles. In addition, regional cinema was accommodated through adjusted voting thresholds (v >= 300), token responses were delivered with paced Server-Sent Events, and mobile drawer interfaces were engineered with touch gesture tracking.
+
+Despite these strengths, the system operates under measurable constraints. Free-tier API quotas restrict request volumes, metadata for newly announced releases can be sparse, persistence is confined to browser localStorage without cross-device cloud synchronization, and the probabilistic language model may still occasionally misinterpret nuanced prompts. Through this project, the team learned the importance of prompt engineering, schema design, and graceful failure handling when integrating generative models with production REST APIs. Future scope includes cloud database synchronization, collaborative filtering hybrid models, and voice interaction. In summary, Kinora demonstrates the practical value of uniting symbolic rule-based logic with modern generative AI.
