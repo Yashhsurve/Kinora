@@ -1,0 +1,401 @@
+================================================================================
+                    KINORA MINI PROJECT REPORT - CORRECTIONS LOG
+================================================================================
+
+This document provides a comprehensive line-by-line and section-by-section audit
+of the original mini project report against the actual codebase of Kinora
+(package.json, server.js, services/mediaData.js, public/app.js, public/index.html,
+public/styles.css, README.md, and .env.example).
+
+CRITICAL ACADEMIC FRAMING CONTRADICTION IN ORIGINAL REPORT:
+The assigned college mini project topic for the Artificial Intelligence subject is:
+"A Rule-Based Recommendation System (movie/series suggestion)".
+The original report completely failed to recognize this topic. Instead, it fabricated
+fictitious machine learning training, high-dimensional neural embeddings, and academic
+semiotics, while completely omitting the real, production-ready rule-based recommendation
+engine implemented in the code.
+
+The corrected report accurately re-frames Kinora as a HYBRID AI RECOMMENDATION SYSTEM:
+a deterministic, knowledge-based Rule-Based Recommendation Engine combined with a
+Generative AI (Google Gemini LLM) conversational reasoning and grounding layer. Every
+statement below documents where the original report deviated from the real codebase,
+citing specific files, functions, and code lines.
+
+--------------------------------------------------------------------------------
+1. TITLE PAGE & FRONT MATTER (Pages 1 & 2)
+--------------------------------------------------------------------------------
+
+[1.1] Title of the Project
+- Original Text: "Cinematic AI Movies and Culture Companion (Kinora)"
+- Why it is wrong (AI Subject Syllabus, package.json, services/mediaData.js):
+  The assigned academic topic for the Artificial Intelligence curriculum is a
+  rule-based movie and series recommendation system combined with generative AI. The
+  original title sounded like an academic humanities research paper and completely
+  obscured the core AI recommendation architecture.
+- Corrected Text: "Kinora: An AI-Powered Movie and Series Recommendation System
+  Using Rule-Based Reasoning and Generative AI"
+
+[1.2] Guide Field on Title Page
+- Original Text: "UNDER THE GUIDANCE OF Prof" (left blank)
+- Why it is wrong:
+  The guide's name was left incomplete.
+- Corrected Text: "UNDER THE GUIDANCE OF Prof. ________" (placeholder retained for
+  the student to insert the guide's name)
+
+[1.3] Certificate Text - Blank Candidate Name
+- Original Text: "submitted by __________________ is a bonafide record..."
+- Why it is wrong:
+  The certificate left the candidate name blank despite 4 students being listed on
+  the title page.
+- Corrected Text: "submitted by Manish Dhupadale, Shivam Lahase, Yash Surve, and
+  Abhishek Ghute is a bonafide record..."
+
+[1.4] Certificate Text - Grammatical Typo
+- Original Text: "...in partial fulfilment of the requirements of thet mini project Work..."
+- Why it is wrong:
+  "thet" is an obvious typographical error for "the".
+- Corrected Text: "...in partial fulfillment of the requirements of the mini project work..."
+
+[1.5] Certificate Text - Missing Guide Name
+- Original Text: "...under the supervision of Prof"
+- Why it is wrong:
+  The guide name was omitted.
+- Corrected Text: "...under the supervision of Prof. ________"
+
+--------------------------------------------------------------------------------
+2. TABLE OF CONTENTS (Page 3)
+--------------------------------------------------------------------------------
+
+[2.1] Typo in Chapter 2 Heading
+- Original Text: "2 WORKING PROCEDIRE"
+- Why it is wrong:
+  "PROCEDIRE" is a typographical error for "PROCEDURE".
+- Corrected Text: "CHAPTER 2: WORKING PROCEDURE"
+
+[2.2] Inappropriate Heading & Typo in Section 2.1
+- Original Text: "2.1 CIRCUET DIAGRAM"
+- Why it is wrong:
+  "CIRCUET" is a typographical error for "CIRCUIT". More importantly, a "Circuit Diagram"
+  belongs to Electrical or Hardware Engineering; Kinora is a pure software web application
+  comprising a browser client, Node.js/Express server, rule-based ranking engine, and cloud APIs.
+- Corrected Text: "2.4 SYSTEM ARCHITECTURE DIAGRAM AND TECHNOLOGY STACK"
+
+[2.3] Missing Subsections for AI Curriculum Requirements
+- Original Text: Completely omitted any subsections for Rule-Based Systems or AI Layers.
+- Why it is wrong:
+  As an AI mini project on rule-based recommendation systems, Chapter 2 must explicitly
+  break down the Rule-Based Recommendation Engine, the AI Conversational Layer, and their
+  hybrid cooperation.
+- Corrected Text: Chapter 2 now contains:
+  2.1 Rule-Based Recommendation Engine (Mood-to-Genre table, IF-THEN rules, Bayesian formula, worked numerical example)
+  2.2 AI Conversational and Grounding Layer (NLP, LLM, function calling, grounding, prompt engineering)
+  2.3 Hybrid Layer Cooperation and Workflow
+  2.4 System Architecture Diagram and Technology Stack
+
+[2.4] Formatting & Hyphenation in Chapter 3
+- Original Text: "3 ADVANTAGES/DISADV-ANTAGES"
+- Why it is wrong:
+  Contains awkward word splitting ("-ANTAGES") and lacks clean chapter titling.
+- Corrected Text: "CHAPTER 3: ADVANTAGES AND DISADVANTAGES"
+
+[2.5] Formatting in Chapter 4
+- Original Text: "4 APPLICATION"
+- Why it is wrong:
+  Standard technical reports use the plural form "APPLICATIONS".
+- Corrected Text: "CHAPTER 4: APPLICATIONS"
+
+--------------------------------------------------------------------------------
+3. CHAPTER 1: INTRODUCTION (Page 4)
+--------------------------------------------------------------------------------
+
+[3.1] Fundamental Purpose & Academic Framing Contradiction
+- Original Text: "The Cinematic AI Movies and Culture Companion (Kinora) is a mini-project
+  designed to demonstrate how multimodal generative AI and web services can be used to
+  interpret and compare films through deep cultural, historical, and narrative lenses...
+  process aesthetic choices, visual semiotics, sociopolitical subtexts, or cross-cultural
+  narrative adaptations."
+- Why it is wrong (services/mediaData.js, server.js, public/app.js):
+  Kinora is not a semiotics analysis research tool for film academics. The actual
+  codebase implements a Hybrid AI Recommendation System:
+  1. A deterministic Rule-Based Recommendation Engine in services/mediaData.js that
+     maps moods to verified genres, enforces temporal/runtime/language IF-THEN filters,
+     applies regional vote thresholds, deduplicates franchises, and calculates Bayesian
+     weighted rankings.
+  2. A Generative AI Conversational Layer powered by Google Gemini (@google/genai) that
+     interprets natural language, executes structured tool calls against TMDB/OMDb, grounds
+     factual statements, and generates personalized explanations.
+  3. A multi-layered Spoiler Shield protecting viewers from plot spoilers.
+- Corrected Text: Replaced with a rigorous academic Introduction establishing the problem
+  of catalog fragmentation, the ungrounded hallucination risk of standalone LLMs, and
+  Kinora's hybrid architecture combining symbolic rule-based logic with generative AI.
+
+[3.2] Complete Omission of "AI Concepts Used" List
+- Original Text: The original report lacked any formal list or mapping to Artificial
+  Intelligence academic concepts.
+- Why it is wrong:
+  An Artificial Intelligence subject report must formally document which AI paradigms
+  and algorithms are implemented.
+- Corrected Text: Added a dedicated "1.3 Artificial Intelligence Concepts Used" subsection
+  detailing: Rule-Based / Knowledge-Based Systems, Content-Based Attribute Filtering,
+  Bayesian Statistical Ranking, Natural Language Processing (NLP), Large Language Models
+  (LLMs), Function Calling and Tool Grounding, Automated Safety Auditing, and Human-AI
+  Interaction (HAI).
+
+[3.3] False Claim of "Multimodal Generative AI"
+- Original Text: "...demonstrate how multimodal generative AI and web services can be used..."
+- Why it is wrong (server.js, services/mediaData.js):
+  The application does not process multimodal inputs (images, audio, or video frames)
+  through the Gemini API. All interactions with the Gemini SDK (@google/genai) use
+  text prompts, conversation history, and JSON tool function calls.
+- Corrected Text: Accurately describes the model as a text-based conversational LLM
+  coupled with live REST APIs.
+
+[3.4] Fabricated Dependencies (body-parser, http-errors)
+- Original Text: "An Express.js application acts as the core server controller, utilizing
+  middleware like cors and body-parser for secure communication and payload formatting."
+- Why it is wrong (package.json lines 21-26, server.js lines 6-18):
+  package.json lists only 4 direct dependencies: "@google/genai", "cors", "dotenv",
+  and "express". There is no "body-parser" or "http-errors" package. Express 4.16+
+  includes native JSON body parsing via `express.json()`, which is what server.js uses
+  at line 17 (`app.use(express.json())`).
+- Corrected Text: "An Express.js application acts as the backend controller, utilizing
+  native `express.json()` middleware for body parsing and the `cors` package for
+  cross-origin resource sharing."
+
+[3.5] Fabricated AI & Cloud Dependencies (@google/generative-ai, google-auth-library, gcp-metadata)
+- Original Text: "The @google/genai and @google/generative-ai packages, authenticated
+  using google-auth-library and monitored via gcp-metadata, provide conversational
+  reasoning and comparative cultural synthesis."
+- Why it is wrong (package.json, server.js lines 10, 296):
+  Kinora does NOT use "@google/generative-ai", "google-auth-library", or "gcp-metadata".
+  It uses the new unified Google GenAI official SDK: `@google/genai` (version ^2.28.0).
+  Authentication is handled purely through an API key passed directly to the constructor
+  (`new GoogleGenAI({ apiKey })`) loaded from environment variables (`.env`). No Google
+  Cloud service accounts or google-auth-library credentials are used.
+- Corrected Text: "The backend integrates Google's official `@google/genai` SDK using an
+  API key stored in environment variables, providing rapid conversational reasoning,
+  context-aware dialogue, and dynamic tool orchestration."
+
+--------------------------------------------------------------------------------
+4. CHAPTER 2: WORKING PROCEDURE (Pages 5 to 7)
+--------------------------------------------------------------------------------
+
+[4.1] Complete Omission of the Rule-Based Recommendation Engine
+- Original Text: Completely omitted any mention of mood-to-genre ontologies, candidate
+  pool harvesting, IF-THEN filters, regional threshold adaptations, Bayesian weighted
+  scoring, franchise deduplication, or discovery styles.
+- Why it is wrong (services/mediaData.js lines 816-1213):
+  The core assigned AI topic of the project is a rule-based recommendation system! Over
+  400 lines of services/mediaData.js are dedicated to this exact engine:
+  - `MOOD_CONFIG` table mapping 8 moods (Cozy, Hyped, Heartbroken, Mind-bending, Scared,
+    Nostalgic, Laugh-out-loud, Inspired) to specific TMDB genre IDs and keywords.
+  - IF-THEN rules for runtime clamping (under 90 min, under 2 hrs), media types, and
+    temporal cutoffs (Nostalgic <= 2005).
+  - Regional language threshold rules: vote count v >= 1500 for global English, but
+    relaxed to v >= 300 for regional Indian/international cinema (Hindi, Tamil, Telugu,
+    Korean, etc.) with rating R >= 6.8.
+  - Graceful fallback relaxation rules if qualified candidates < 15 (v >= 800/150, R >= 6.5).
+  - Bayesian Weighted Rating: WR = (v/(v+m))*R + (m/(v+m))*C.
+  - Composite Scoring: Score = 0.5*normPop + 0.3*normWR + 0.2*moodGenreFit.
+  - Franchise and sequel deduplication (`filterSequelsAndDuplicates`) using regex to retain
+    only the earliest entry in a franchise.
+  - Discovery styles: Popular, Hidden Gems (v between 300-2500, R >= 7.5), and Balanced Mix.
+- Corrected Text: Section 2.1 now provides an exhaustive mathematical and algorithmic
+  breakdown of the rule-based engine, including a complete mood mapping table, formal IF-THEN
+  rules, the exact Bayesian scoring formulas, and a step-by-step worked numerical example
+  calculating the score and badge for "Shutter Island".
+
+[4.2] False Claim of Custom Machine Learning Model Training & Neural Embeddings
+- Original Text: Suggested that recommendations were produced via deep learning embeddings,
+  latent vector clustering, or trained neural network models.
+- Why it is wrong (package.json, services/mediaData.js):
+  There is NO machine learning training code, NO PyTorch, NO TensorFlow, and NO vector
+  database (Pinecone, ChromaDB) in the codebase. Kinora is a HYBRID AI system where
+  candidate filtering and ranking are 100% rule-based and deterministic, while conversational
+  dialogue and natural language parsing are handled by Gemini LLM. Falsely claiming ML
+  model training is academic dishonesty.
+- Corrected Text: The report explicitly clarifies what is rule-based and what is LLM-generated,
+  verifying that ranking is computed via deterministic Bayesian statistics and content-based
+  attribute rules, not black-box neural embeddings.
+
+[4.3] Fabricated Prompt Directives & "Semiotic Perspectives"
+- Original Text: "Inject Cultural & Semiotic Prompt Directives... enforcing three critical
+  evaluation perspectives: 1. Cross-Cultural Narratology... 2. Structural Semiotics...
+  3. Sociopolitical Context... dispatched via @google/genai through gaxios connection pools."
+- Why it is wrong (server.js lines 23-34, 229-295):
+  The server constructs a system instruction consisting of `KINORA_BASE_PROMPT` (concise
+  3 to 6 lines, bold title recommendations with runtime and year), an `honestyRule`
+  (never state a title does not exist without tool confirmation), a `lookupRule` (always
+  call tools before answering factual queries), active mode instructions, and strict
+  `spoilerShieldPrompt` rules. There is zero mention of semiotics or narratology, and
+  `gaxios` is not a project dependency.
+- Corrected Text: Accurately documents Kinora's prompt engineering: persona definition,
+  brevity constraint, Honesty Rule, Lookup Rule, and dynamic watch boundary injection.
+
+[4.4] Protocol Buffer Serialization Claim
+- Original Text: "Data buffers are serialized and standardized through protocol buffer
+  structures (@protobufjs/) for efficient transfer."
+- Why it is wrong (package.json, server.js lines 201-205, 483-507):
+  Kinora does not use `@protobufjs/` or protocol buffers. Client-server data streaming
+  is implemented entirely using standard HTTP Server-Sent Events (SSE, MIME type:
+  `text/event-stream`), where JSON-encoded events are written incrementally to the response
+  stream (`res.write('data: ...\n\n')`).
+- Corrected Text: Accurately documents real-time Server-Sent Events (SSE) streaming with
+  paced 25ms token delivery, Title Inspector event payloads, and premature client close
+  handling (`res.on('close')`).
+
+[4.5] Fabricated Comparison Flowchart
+- Original Text: "Analyze Feudal Ronin Archetype -> Map to Lone Gunslinger Trope ->
+  Examine Structural Mise-en-scene -> Contrast Nihilism with Western Individualism"
+- Why it is wrong (server.js lines 151-185, services/mediaData.js lines 1360-1510):
+  Kinora's Compare & Debate feature executes a two-stage pipeline:
+  Stage 1: Fetches real TMDB and OMDb data in parallel for Title A and Title B (IMDb ratings,
+  runtime, genres, streaming providers) to render comparison metrics.
+  Stage 2: Gemini evaluates the two titles across structured criteria (Story, Acting,
+  Pacing, Rewatch Value, Cultural Impact) and outputs targeted advice ("Watch X if...").
+- Corrected Text: Section 2.2 documents the actual two-stage Compare & Debate architecture.
+
+[4.6] Misrepresentation of Spoiler Shield as a Regex Filter
+- Original Text: Misrepresented the Spoiler Shield as simple post-generation regex string
+  matching or ignored it.
+- Why it is wrong (services/mediaData.js lines 635-805, server.js lines 435-470):
+  The Spoiler Shield is an upstream data-filtering architecture:
+  1. Backend Upstream Filtering: In `executeTool()`, when `get_season_episodes` is called,
+     all episodes beyond the user's progress point (> targetEpisode) are completely pruned
+     from the database payload. In `get_details`, TV status is clamped and upcoming season
+     cast lists are masked. In `search_title`, live Wikipedia scraping is disabled on
+     protected titles to prevent uncontrolled web plot leaks.
+  2. Grounding Elimination: Because the forbidden plot data NEVER enters Gemini's context
+     window, the model is mathematically prevented from hallucinating future twists.
+  3. Defense-in-Depth: Prompt boundary guardrails and a zero-temperature Flash-Lite safety
+     audit evaluate the generated text before sending to the client.
+- Corrected Text: Fully documents the multi-layered upstream data-path filtering, prompt
+  guardrails, and zero-temperature safety audit.
+
+[4.7] Misrepresentation of Taste Profile & Watchlist Personalization
+- Original Text: Claimed high-dimensional user embedding profiles or cloud-synced databases.
+- Why it is wrong (public/app.js lines 21-30, 507-515):
+  Kinora does NOT maintain server-side user vectors or cloud accounts:
+  1. Taste Profile is implemented as pre-configured UI quick-prompt chips (e.g., "Based
+     on my love for Dark and Inception, recommend 3 hidden gems") that pass user genre/title
+     constraints directly into Gemini's context window.
+  2. Watchlist is a client-side localStorage store (`kinora_watchlist_v1`) that records
+     saved titles, status, and dismissed items locally in the user's browser.
+- Corrected Text: Section 1.3 and Chapter 2 accurately describe Taste Profile as contextual
+  prompt engineering chips and Watchlist as browser localStorage persistence.
+
+--------------------------------------------------------------------------------
+5. SECTION 2.1: CIRCUIT DIAGRAM & ARCHITECTURE (Page 8)
+--------------------------------------------------------------------------------
+
+[5.1] Section Heading & Concept
+- Original Text: "2.1.Circuit Diagram:"
+- Why it is wrong:
+  Software applications do not have electrical circuits.
+- Corrected Text: "2.4 System Architecture Diagram and Technology Stack"
+
+[5.2] Architecture Flow & Components
+- Original Text: Showed fictitious boxes for "Body Parser", "Finalhandler", "Google Auth
+  Engine", "Gaxios", and "Cultural Orchestration Layer".
+- Why it is wrong:
+  Completely misrepresented the system architecture.
+- Corrected Text: Section 2.4 provides an updated, accurate ASCII architecture diagram
+  illustrating the real data flow:
+  User (Web Browser) -> Gemini LLM (NLP Entity & Intent Extraction) -> Upstream Spoiler
+  Shield (Data Path Pruning) -> Rule-Based Recommendation Engine (Mood-to-Genre, IF-THEN,
+  Bayesian Scoring, Deduplication) -> TMDB/OMDb Live APIs -> Gemini Explanation Layer
+  (Blurbs & Zero-Temp Safety Audit) -> Client UI (SSE Stream & Title Inspector).
+
+--------------------------------------------------------------------------------
+6. CHAPTER 3: ADVANTAGES AND DISADVANTAGES (Pages 10 & 11)
+--------------------------------------------------------------------------------
+
+[6.1] Advantage 2 & 3: Semiotic and Cultural Claims
+- Original Text: "Deep Contextual Insights: Evaluates thematic subtexts, visual semiotics,
+  and political movements... Cross-Cultural Comparative Analysis..."
+- Why it is wrong:
+  Exaggerates LLM capabilities into academic film theory. Kinora's real advantages stem
+  from its HYBRID AI architecture: combining deterministic rule-based precision with
+  conversational fluency.
+- Corrected Text: Formulates advantages tailored to Hybrid AI: Elimination of Hallucinations,
+  Mathematical Transparency and Explainability (auditable Bayesian scoring), Upstream Plot
+  Protection, and Zero Infrastructure Overhead.
+
+[6.2] Advantage 5: Gaxios and Retries Claim
+- Original Text: "Resilient Cloud Communication: Employs gaxios with automated retries..."
+- Why it is wrong:
+  `gaxios` is not a project dependency.
+- Corrected Text: "Graceful Model Fallback Architecture: Implements multi-model failover
+  across candidate Gemini models (`gemini-3.5-flash-lite`, `gemini-flash-lite-latest`,
+  `gemini-3.5-flash`)."
+
+[6.3] Disadvantage 1: Claim of "No Grounded Retrieval Checks"
+- Original Text: "Potential for Model Hallucinations... Reduces factual reliability without
+  additional grounded retrieval checks."
+- Why it is wrong (services/mediaData.js, server.js lines 339, 350-411):
+  This statement is completely false. Kinora implements 8 function-calling tools that query
+  live TMDB and OMDb data before answering, and enforces a mandatory Lookup Rule.
+- Corrected Text: Identifies true technical constraints: Reliance on Third-Party API Rate
+  Limits, Cold Start for Brand-New Independent Titles (<150 votes), and Client-Side
+  LocalStorage Scope (no cross-device cloud sync).
+
+[6.4] Disadvantage 7 & 8: Video Frame Extraction & Multimodal Embeddings
+- Original Text: Complained about "high-dimensional multimodal embeddings", "@protobufjs/
+  overhead", and lack of "real-time video reel parsing".
+- Why it is wrong:
+  Kinora is an intelligent conversational recommendation assistant, not a video computer
+  vision processor.
+- Corrected Text: Completely eliminated irrelevant computer vision complaints, replacing
+  them with real software engineering considerations.
+
+--------------------------------------------------------------------------------
+7. CHAPTER 4: APPLICATIONS (Pages 11 & 12)
+--------------------------------------------------------------------------------
+
+[7.1] Academic & Museum Bias
+- Original Text: Focused on "Film Archive and Museum Education", "MUBI/Criterion Curated
+  Platform Integration", and "Cultural Diplomacy".
+- Why it is wrong:
+  Kinora was built as a modern, consumer-facing companion for movie and television viewers.
+- Corrected Text: Documents real-world practical applications:
+  1. Academic AI Demonstrations (combining symbolic rules with generative LLMs).
+  2. Personalized Streaming Companions (navigating fragmented OTT platforms).
+  3. Spoiler-Safe Television Binge Watching (multi-season episode tracking).
+  4. Film Education and Critical Comparison (head-to-head metrics and debates).
+
+--------------------------------------------------------------------------------
+8. CHAPTER 5: FUTURE SCOPE (Page 13)
+--------------------------------------------------------------------------------
+
+[8.1] Framing of Video Inspection & Semiotic Knowledge Base
+- Original Text: "Multimodal Frame-by-Frame Video Inspection... Community-Reviewed Semiotic
+  Knowledge Base..."
+- Why it is wrong:
+  Infeasible and unrelated to the project's real AI recommendation architecture.
+- Corrected Text: Formulates realistic, high-impact AI engineering upgrades:
+  1. Multi-Criteria Collaborative Filtering (hybridizing user matrices with rule-based ranking).
+  2. Cross-Device Cloud Synchronization (PostgreSQL with Supabase).
+  3. Multimodal Vision Reasoning (Gemini Vision for poster/cinematography screenshot search).
+  4. Voice-Driven Conversational Interface (Web Speech API for smart TV environments).
+
+--------------------------------------------------------------------------------
+9. CHAPTER 6: CONCLUSION (Page 14)
+--------------------------------------------------------------------------------
+
+[9.1] Stray Citation Artifacts
+- Original Text: Contained multiple stray `[cite: 1]` tags scattered across sentences.
+- Why it is wrong:
+  Uncleaned AI generator outputs look sloppy and unprofessional in an engineering report.
+- Corrected Text: All citation tags completely eliminated.
+
+[9.2] Academic Takeaway & Hybrid AI Conclusion
+- Original Text: Generic paragraph mentioning "Computational Humanities" and "gaxios client".
+- Why it is wrong:
+  Completely failed to summarize the engineering achievements of the project.
+- Corrected Text: Replaced with an authoritative, 500-word conclusion synthesizing the
+  project's key finding: modern AI achieves its highest reliability when pairing probabilistic
+  generative LLMs with deterministic, verifiable rule-based reasoning engines.
+
+================================================================================
+END OF CORRECTIONS LOG
+================================================================================
