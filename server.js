@@ -219,6 +219,11 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
+    const reqStartTime = Date.now();
+    let ttfb = null;
+    let firstTokenTime = null;
+    let toolCallsDuration = 0;
+
     // Current date injection on every request
     const currentDate = new Date().toLocaleDateString('en-US', {
       year: 'numeric',
@@ -304,27 +309,34 @@ RULES FOR PROTECTED TITLES:
       }
     });
 
-    // Format previous conversation history for the chat session
+    ttfb = Date.now() - reqStartTime;
+
+    // Format previous conversation history: last 10 messages, trimmed content for low token overhead
     const formattedHistory = [];
     if (Array.isArray(history) && history.length > 0) {
-      for (const item of history.slice(-6)) {
+      for (const item of history.slice(-10)) {
         if (item.role === 'user' || item.role === 'model') {
+          const content = typeof item.content === 'string'
+            ? (item.content.length > 400 ? item.content.slice(0, 400) + '...' : item.content)
+            : '';
           formattedHistory.push({
             role: item.role === 'user' ? 'user' : 'model',
-            parts: [{ text: item.content }],
+            parts: [{ text: content }],
           });
         }
       }
     }
 
+    // Prioritize fastest flash-lite model
     const candidateModels = [
-      'gemini-3.5-flash-lite',
       'gemini-flash-lite-latest',
+      'gemini-3.5-flash-lite',
       'gemini-3.5-flash',
     ];
 
     let usedLiveTool = false;
     let inspectorTitleData = null;
+    let inspectorTitleDataSent = false;
     let generatedText = null;
 
     for (const modelName of candidateModels) {
@@ -338,6 +350,7 @@ RULES FOR PROTECTED TITLES:
             systemInstruction: fullInstruction,
             tools: [{ functionDeclarations: media.toolDeclarations }],
             temperature: 0.7,
+            maxOutputTokens: 600,
           },
           history: formattedHistory,
         });
@@ -345,18 +358,24 @@ RULES FOR PROTECTED TITLES:
         let response = await chat.sendMessage({ message });
         let toolTurns = 0;
 
-        // Multi-turn tool execution loop (max 2 turns to ensure snappy response)
+        // Multi-turn tool execution loop (max 2 turns) with parallel tool execution
         while (response.functionCalls && response.functionCalls.length > 0 && toolTurns < 2) {
           if (isClientDisconnected || res.writableEnded) break;
           toolTurns++;
           usedLiveTool = true;
 
-          const toolResponses = [];
-          for (const call of response.functionCalls) {
-            console.log(`[Tool Call Turn ${toolTurns}] ${call.name}:`, call.args);
-            // Execute tool passing allShields for filtering across all modes
-            const toolOutput = await media.executeTool(call.name, call.args, allShields);
+          const toolStart = Date.now();
+          const toolResults = await Promise.all(
+            response.functionCalls.map(async (call) => {
+              console.log(`[Tool Call Turn ${toolTurns}] ${call.name}:`, call.args);
+              const toolOutput = await media.executeTool(call.name, call.args, allShields);
+              return { call, toolOutput };
+            })
+          );
+          toolCallsDuration += (Date.now() - toolStart);
 
+          const toolResponses = [];
+          for (const { call, toolOutput } of toolResults) {
             // Capture data for Title Inspector
             if (call.name === 'get_details' && toolOutput && !toolOutput.error) {
               inspectorTitleData = toolOutput;
@@ -407,12 +426,18 @@ RULES FOR PROTECTED TITLES:
             });
           }
 
+          // Early delivery of Title Inspector payload as soon as available
+          if (inspectorTitleData && !inspectorTitleDataSent && !isClientDisconnected && !res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ type: 'title_inspector', titleData: inspectorTitleData })}\n\n`);
+            inspectorTitleDataSent = true;
+          }
+
           response = await chat.sendMessage({ message: toolResponses });
         }
 
         generatedText = response.text || '';
 
-        // If the model ended on function calls without outputting text, prompt it for final synthesis!
+        // If the model ended on function calls without outputting text, prompt it for final synthesis
         if (!generatedText || !generatedText.trim()) {
           console.log(`[Tool Call Loop Finished] Model produced no text parts after tools. Synthesizing final response...`);
           try {
@@ -432,47 +457,45 @@ RULES FOR PROTECTED TITLES:
         // -------------------------------------------------------------
         // OPTIONAL SAFETY CHECK (Fast Flash-Lite audit across all shields)
         // -------------------------------------------------------------
-        const activeOrRelevantShield = allShields.find((s) => {
-          const tName = (s.title || s.showTitle || '').toLowerCase();
-          return tName && (message.toLowerCase().includes(tName) || generatedText.toLowerCase().includes(tName));
-        });
+        if (allShields.length > 0 && generatedText && !isClientDisconnected) {
+          const activeOrRelevantShield = allShields.find((s) => {
+            const tName = (s.title || s.showTitle || '').toLowerCase();
+            return tName && (message.toLowerCase().includes(tName) || generatedText.toLowerCase().includes(tName));
+          });
 
-        if (activeOrRelevantShield && generatedText && !isClientDisconnected) {
-          try {
-            const safetyChat = ai.chats.create({
-              model: 'gemini-3.5-flash-lite',
-              config: { temperature: 0.0, maxOutputTokens: 10 },
-            });
-            const targetTitle = activeOrRelevantShield.title || activeOrRelevantShield.showTitle;
-            const progressPointStr = activeOrRelevantShield.season
-              ? `Season ${activeOrRelevantShield.season} Episode ${activeOrRelevantShield.episode}`
-              : (activeOrRelevantShield.absoluteEpisode ? `Episode ${activeOrRelevantShield.absoluteEpisode}` : 'premise only');
-            const safetyPrompt = `SPOILER SAFETY AUDIT:
-The user is at: "${targetTitle}" ${progressPointStr}.
-Does the following response reveal, describe, or spoil any events, character fates, deaths, or plot twists occurring AFTER that point?
-Answer strictly with YES or NO.
+          if (activeOrRelevantShield) {
+            try {
+              const safetyChat = ai.chats.create({
+                model: 'gemini-flash-lite-latest',
+                config: { temperature: 0.0, maxOutputTokens: 5 },
+              });
+              const targetTitle = activeOrRelevantShield.title || activeOrRelevantShield.showTitle;
+              const progressPointStr = activeOrRelevantShield.season
+                ? `Season ${activeOrRelevantShield.season} Episode ${activeOrRelevantShield.episode}`
+                : (activeOrRelevantShield.absoluteEpisode ? `Episode ${activeOrRelevantShield.absoluteEpisode}` : 'premise only');
+              const safetyPrompt = `SPOILER SAFETY AUDIT:
+User watched "${targetTitle}" up to ${progressPointStr}.
+Does this text spoil anything AFTER that? Answer YES or NO.
+Text: ${generatedText.slice(0, 500)}`;
 
-Response to check:
-${generatedText}
-
-Answer (YES or NO):`;
-            const safetyCheck = await safetyChat.sendMessage({ message: safetyPrompt });
-            const answer = (safetyCheck.text || '').trim().toUpperCase();
-            if (answer.includes('YES')) {
-              console.warn(`[Spoiler Shield Safety Check] CAUGHT SPOILER for ${targetTitle}! Replacing with safe fallback.`);
-              generatedText = "I almost said too much, so I held that back. Ask me about what you've watched so far.";
-            } else {
-              console.log(`[Spoiler Shield Safety Check] Clean response verified for ${targetTitle}.`);
+              const safetyCheck = await safetyChat.sendMessage({ message: safetyPrompt });
+              const answer = (safetyCheck.text || '').trim().toUpperCase();
+              if (answer.includes('YES')) {
+                console.warn(`[Spoiler Shield Safety Check] CAUGHT SPOILER for ${targetTitle}! Replacing with safe fallback.`);
+                generatedText = "I almost said too much, so I held that back. Ask me about what you've watched so far.";
+              } else {
+                console.log(`[Spoiler Shield Safety Check] Clean response verified for ${targetTitle}.`);
+              }
+            } catch (auditErr) {
+              console.warn('[Spoiler Shield Safety Check Error]:', auditErr.message);
             }
-          } catch (auditErr) {
-            console.warn('[Spoiler Shield Safety Check Error]:', auditErr.message);
           }
         }
 
         break;
       } catch (modelErr) {
         console.warn(`Model ${modelName} error:`, modelErr.message || modelErr);
-        await wait(500);
+        await wait(200);
       }
     }
 
@@ -480,9 +503,10 @@ Answer (YES or NO):`;
       throw new Error('All candidate models failed to generate response');
     }
 
-    // 1. Send Title Inspector payload if title details were found
-    if (inspectorTitleData && !isClientDisconnected && !res.writableEnded) {
+    // 1. Send Title Inspector payload if not yet sent
+    if (inspectorTitleData && !inspectorTitleDataSent && !isClientDisconnected && !res.writableEnded) {
       res.write(`data: ${JSON.stringify({ type: 'title_inspector', titleData: inspectorTitleData })}\n\n`);
+      inspectorTitleDataSent = true;
     }
 
     // 2. Send meta tag indicating live tool usage
@@ -490,16 +514,22 @@ Answer (YES or NO):`;
       res.write(`data: ${JSON.stringify({ type: 'meta', usedLiveTool: true })}\n\n`);
     }
 
-    // 3. Stream response text chunks smoothly to the client
+    // 3. Stream response text chunks smoothly to the client with minimal 5ms delay
     const textChunks = generatedText.match(/\S+\s*/g) || [generatedText];
     for (const chunk of textChunks) {
       if (isClientDisconnected || res.writableEnded) {
         console.log('Client aborted stream during text delivery.');
         break;
       }
+      if (firstTokenTime === null) {
+        firstTokenTime = Date.now() - reqStartTime;
+      }
       res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
-      await wait(25); // Paced streaming feel
+      await wait(5); // 5ms minimal delay
     }
+
+    const totalTime = Date.now() - reqStartTime;
+    console.log(`[Timing] Query: "${message.slice(0, 40)}" | TTFB: ${ttfb} ms | Tool calls: ${toolCallsDuration} ms | First token: ${firstTokenTime} ms | Total: ${totalTime} ms`);
 
     if (!isClientDisconnected && !res.writableEnded) {
       res.write('data: [DONE]\n\n');

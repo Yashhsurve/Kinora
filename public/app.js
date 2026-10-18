@@ -931,30 +931,74 @@ function renderMarkdown(text) {
 }
 
 // ========================================================
-// 6. CHAT SESSION MANAGEMENT
+// 6. CHAT SESSION MANAGEMENT (Task 1: Unified startNewChat)
 // ========================================================
-function createNewChat() {
-  if (state.isGenerating) return;
-
-  // 1. Switch active mode to Kinora AI ('general')
-  setMode('general', false);
-
-  // 2. Hide any open mode-specific views and modals
-  if (dom.moodPicksContainer) dom.moodPicksContainer.classList.add('hidden');
-  if (dom.compareContainer) dom.compareContainer.classList.add('hidden');
-  closeWatchlistModal();
-
-  // 3. Clear input box and reset height/styling
-  if (dom.chatInput) {
-    dom.chatInput.value = '';
-    updateChatInputHeight();
-    setChatInputFilled(false);
+function startNewChat() {
+  // 1. If a reply is currently streaming, stop stream, keep partial text in old chat, and unlock UI
+  if (state.isGenerating) {
+    if (state.currentAbortController) {
+      state.currentAbortController.abort();
+      state.currentAbortController = null;
+    }
+    state.isGenerating = false;
+    setControlsLocked(false);
   }
 
-  // 4. Close Title Inspector if showing a title from old chat
+  // 2. Close mobile drawer, modals and Title Inspector
+  closeMobileSidebar();
+  closeWatchlistModal();
+  if (typeof closeSpoilerModal === 'function') {
+    closeSpoilerModal();
+  }
   state.activeTitleInspectorData = null;
   hideMobileInspectorPill();
   closeInspectorPanel(false);
+
+  // 3. Reset temporary state of every mode:
+  // Reset Compare & Debate state and inputs
+  if (typeof resetCompareSide === 'function') {
+    resetCompareSide('a');
+    resetCompareSide('b');
+  }
+  if (typeof resetCompareView === 'function') {
+    resetCompareView();
+  }
+
+  // Reset Mood Picks temporary results & filters
+  if (typeof moodState !== 'undefined') {
+    moodState.cachedPool = [];
+    moodState.displayedPicks = [];
+    moodState.displayedCount = 0;
+    moodState.dismissedIds = [];
+    moodState.nextPageOffset = 2;
+  }
+  if (dom.moodResultsSection) dom.moodResultsSection.classList.add('hidden');
+  if (dom.moodCardsList) dom.moodCardsList.innerHTML = '';
+  if (dom.moodCardsLoading) dom.moodCardsLoading.classList.add('hidden');
+  if (dom.moodFallbackBox) dom.moodFallbackBox.classList.add('hidden');
+  if (dom.moodPlatformNote) dom.moodPlatformNote.classList.add('hidden');
+  if (dom.moodCustomInput) dom.moodCustomInput.value = '';
+
+  // Hide mode containers from the main area
+  if (dom.moodPicksContainer) dom.moodPicksContainer.classList.add('hidden');
+  if (dom.compareContainer) dom.compareContainer.classList.add('hidden');
+
+  // 4. Switch active mode to Kinora AI ('general')
+  // Update sidebar highlight, top bar title ("Kinora AI"), rotating placeholder list for Kinora AI
+  state.currentMode = 'general';
+  localStorage.setItem(STORAGE_KEYS.MODE, 'general');
+
+  document.querySelectorAll('.mode-item').forEach((item) => {
+    item.classList.toggle('active', item.dataset.mode === 'general');
+  });
+
+  if (dom.currentModeTitle) {
+    dom.currentModeTitle.textContent = MODE_DATA.general.title;
+  }
+  if (dom.inputModeTag) {
+    dom.inputModeTag.innerHTML = `${renderIcon(MODE_DATA.general.icon)} <span>${escapeHtml(MODE_DATA.general.title)}</span>`;
+  }
+  updateRotatingPlaceholderMode('general');
 
   // 5. Create fresh empty conversation (prevent duplicate empty sessions)
   const activeSession = getActiveSession();
@@ -973,17 +1017,34 @@ function createNewChat() {
     state.currentSessionId = newSession.id;
   }
 
+  // 6. Clear main area completely and show home screen (hero welcome with the 4 cards)
+  if (dom.messagesContainer) {
+    dom.messagesContainer.innerHTML = '';
+    dom.messagesContainer.classList.add('hidden');
+  }
+  if (dom.heroWelcome) {
+    dom.heroWelcome.classList.remove('hidden');
+    updateWelcomeViewForMode('general');
+  }
+
+  // 7. Clear chat input and sync placeholder
+  if (dom.chatInput) {
+    dom.chatInput.value = '';
+    updateChatInputHeight();
+    setChatInputFilled(false);
+  }
+  syncPlaceholderInputState();
+
   saveSessionsToStorage();
   renderHistory();
-  renderActiveSession();
-  closeMobileSidebar();
 
-  // 8. Move focus to chat input only on desktop (never on mobile touch devices)
+  // 8. Focus chat input on desktop only (never on mobile touch devices)
   const isDesktop = window.innerWidth > 768 && !('ontouchstart' in window);
   if (isDesktop && dom.chatInput) {
     dom.chatInput.focus();
   }
 }
+const createNewChat = startNewChat;
 
 function getActiveSession() {
   if (!state.currentSessionId) return null;
@@ -993,6 +1054,34 @@ function getActiveSession() {
 function renderActiveSession() {
   const session = getActiveSession();
 
+  // If this session has existing chat messages, display the conversation,
+  // keeping the active mode highlight and top bar matching the session's mode.
+  if (session && session.messages && session.messages.length > 0) {
+    if (dom.moodPicksContainer) dom.moodPicksContainer.classList.add('hidden');
+    if (dom.compareContainer) dom.compareContainer.classList.add('hidden');
+    if (dom.heroWelcome) dom.heroWelcome.classList.add('hidden');
+    if (dom.messagesContainer) {
+      dom.messagesContainer.classList.remove('hidden');
+      dom.messagesContainer.innerHTML = '';
+    }
+
+    session.messages.forEach((msg) => {
+      appendMessageToDOM(msg.role, msg.content, false, msg.titleData);
+    });
+
+    const lastBotMsg = [...session.messages].reverse().find((m) => m.role === 'model' && m.titleData);
+    if (lastBotMsg && lastBotMsg.titleData) {
+      state.activeTitleInspectorData = lastBotMsg.titleData;
+      if (window.innerWidth <= 768) {
+        showMobileInspectorPill(lastBotMsg.titleData);
+      }
+    }
+
+    scrollToBottom();
+    return;
+  }
+
+  // For empty sessions, render the view according to the active mode:
   if (state.currentMode === 'mood-picks') {
     if (dom.moodPicksContainer) dom.moodPicksContainer.classList.remove('hidden');
     if (dom.compareContainer) dom.compareContainer.classList.add('hidden');
@@ -1008,34 +1097,12 @@ function renderActiveSession() {
     if (dom.moodPicksContainer) dom.moodPicksContainer.classList.add('hidden');
     if (dom.compareContainer) dom.compareContainer.classList.add('hidden');
 
-    if (!session || !session.messages || session.messages.length === 0) {
-      if (dom.heroWelcome) dom.heroWelcome.classList.remove('hidden');
-      if (dom.messagesContainer) {
-        dom.messagesContainer.classList.add('hidden');
-        dom.messagesContainer.innerHTML = '';
-      }
-      updateWelcomeViewForMode(state.currentMode);
-    } else {
-      if (dom.heroWelcome) dom.heroWelcome.classList.add('hidden');
-      if (dom.messagesContainer) {
-        dom.messagesContainer.classList.remove('hidden');
-        dom.messagesContainer.innerHTML = '';
-      }
-
-      session.messages.forEach((msg) => {
-        appendMessageToDOM(msg.role, msg.content, false, msg.titleData);
-      });
-
-      const lastBotMsg = [...session.messages].reverse().find((m) => m.role === 'model' && m.titleData);
-      if (lastBotMsg && lastBotMsg.titleData) {
-        state.activeTitleInspectorData = lastBotMsg.titleData;
-        if (window.innerWidth <= 768) {
-          showMobileInspectorPill(lastBotMsg.titleData);
-        }
-      }
-
-      scrollToBottom();
+    if (dom.heroWelcome) dom.heroWelcome.classList.remove('hidden');
+    if (dom.messagesContainer) {
+      dom.messagesContainer.classList.add('hidden');
+      dom.messagesContainer.innerHTML = '';
     }
+    updateWelcomeViewForMode(state.currentMode);
   }
 }
 
@@ -1190,7 +1257,14 @@ function renderHistory() {
 }
 
 function switchSession(id) {
-  if (state.isGenerating) return;
+  if (state.isGenerating) {
+    if (state.currentAbortController) {
+      state.currentAbortController.abort();
+      state.currentAbortController = null;
+    }
+    state.isGenerating = false;
+    setControlsLocked(false);
+  }
   const session = state.sessions.find((s) => s.id === id);
   if (!session) return;
 
@@ -1356,8 +1430,8 @@ function setControlsLocked(locked) {
   }
 
   // 3. Disable all other controls that could navigate or send a message
+  // Note: dom.btnNewChat is deliberately NOT locked, allowing user to cancel/abort stream anytime
   const elementsToLock = [
-    dom.btnNewChat,
     dom.btnOpenWatchlist,
     dom.btnClearHistory,
     dom.btnVoiceInput,
@@ -3314,31 +3388,29 @@ function bindEvents() {
     }
   });
 
-  // Global Keyboard Shortcuts
+  // Global Keyboard Shortcuts (Task 1: Ctrl+K / Cmd+K triggers startNewChat)
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
-      if (!state.isGenerating) createNewChat();
+      startNewChat();
     }
   });
 
-  // Brand Logo & Title Link: smoothly return to home / new chat on direct click
+  // Brand Logo & Title Link (Task 1: click on logo + text triggers startNewChat)
   if (dom.brandHomeLink) {
     dom.brandHomeLink.addEventListener('click', (e) => {
-      // Allow user to Ctrl+Click or Cmd+Click to open the external URL in a new tab
-      if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
-        e.preventDefault();
-        if (state.isGenerating) return;
-        setMode('general');
-        createNewChat();
-      }
+      e.preventDefault();
+      startNewChat();
     });
   }
 
-  // New Chat button
-  dom.btnNewChat.addEventListener('click', () => {
-    if (!state.isGenerating) createNewChat();
-  });
+  // New Chat button (Task 1: triggers startNewChat)
+  if (dom.btnNewChat) {
+    dom.btnNewChat.addEventListener('click', (e) => {
+      e.preventDefault();
+      startNewChat();
+    });
+  }
 
   // Clear History (Dustbin Button): Reliable, popup-free, mobile-friendly with 5s Undo Toast
   dom.btnClearHistory.addEventListener('click', (e) => {

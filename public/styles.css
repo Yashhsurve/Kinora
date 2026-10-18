@@ -298,12 +298,22 @@ button {
   color: inherit;
   cursor: pointer;
   border-radius: var(--radius-md);
+  background: transparent;
+  border: none;
+  font: inherit;
+  text-align: left;
+  width: 100%;
   transition: background var(--transition-fast), opacity var(--transition-fast);
 }
 
 .brand:hover {
   background: var(--bg-hover);
   opacity: 0.95;
+}
+
+.brand:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
 }
 
 .brand-icon {

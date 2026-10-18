@@ -188,6 +188,10 @@ async function search_title(args = {}) {
   const { query, year, type = 'multi' } = args;
   if (!query) return { error: 'Query is required' };
 
+  const cacheKey = `assembled_search:${type}:${query.trim().toLowerCase()}:${year || ''}:${args.disableLiveFallback ? 'nofb' : 'fb'}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
   let endpoint = '/search/multi';
   if (type === 'movie') endpoint = '/search/movie';
   if (type === 'tv') endpoint = '/search/tv';
@@ -227,14 +231,16 @@ async function search_title(args = {}) {
   if (!args.disableLiveFallback && (results.length === 0 || (targetYear && targetYear >= 2025 && !hasRecentMatch))) {
     const fallback = await getLatestInfoFallback(`${query} ${year || ''}`.trim());
     if (fallback) {
-      return {
+      const fbResult = {
         source: 'live_grounded_fallback',
         results: [fallback],
       };
+      setCached(cacheKey, fbResult);
+      return fbResult;
     }
   }
 
-  return {
+  const result = {
     source: 'tmdb',
     count: results.length,
     results: results.slice(0, 5).map((r) => ({
@@ -247,6 +253,8 @@ async function search_title(args = {}) {
       poster_path: r.poster_path ? `https://image.tmdb.org/t/p/w500${r.poster_path}` : null,
     })),
   };
+  setCached(cacheKey, result);
+  return result;
 }
 
 /**
@@ -255,6 +263,10 @@ async function search_title(args = {}) {
 async function get_details(args = {}) {
   const { id, type = 'movie' } = args;
   if (!id) return { error: 'ID is required' };
+
+  const cacheKey = `assembled_details:${type}:${id}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
 
   const raw = await tmdbFetch(`/${type}/${id}`, {
     append_to_response: 'credits,videos,external_ids,watch/providers',
@@ -323,7 +335,7 @@ async function get_details(args = {}) {
     durationInfo = `${raw.number_of_seasons} Season${raw.number_of_seasons > 1 ? 's' : ''} (${raw.number_of_episodes || 0} Ep)`;
   }
 
-  return {
+  const result = {
     id: raw.id,
     type,
     title: raw.title || raw.name,
@@ -346,6 +358,9 @@ async function get_details(args = {}) {
     backdrop_url: raw.backdrop_path ? `https://image.tmdb.org/t/p/w1280${raw.backdrop_path}` : null,
     watch_providers_in: watchInIndia,
   };
+
+  setCached(cacheKey, result);
+  return result;
 }
 
 /**
